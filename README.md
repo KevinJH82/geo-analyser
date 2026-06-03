@@ -10,29 +10,72 @@
 
 支持 **Landsat 8/9** 和 **Sentinel-2** 多光谱影像，支持 **.npy 格式**数据。
 
-## 快速开始
+## 安装与运行
 
-### 1. 安装依赖
+### 环境要求
+
+- **Python 3.9+**（在 macOS / Python 3.9.6 上测试通过）
+- 依赖 **rasterio 1.3.8**(读写 GeoTIFF/ENVI)。pip 安装的 rasterio wheel 已自带 GDAL，**无需单独安装 GDAL**；若使用源码编译版本，则需系统先装好 GDAL。
+- 蚀变/InSAR 等功能依赖 NumPy、SciPy、Matplotlib、Pillow；可选的矿床类型 LLM 推理依赖 openai/anthropic 客户端(见下方环境变量)。
+
+### 1. 获取代码
 
 ```bash
+git clone git@github.com:KevinJH82/geo-analyser.git
+cd geo-analyser
+```
+
+### 2. 创建虚拟环境并安装依赖(推荐)
+
+```bash
+python3 -m venv venv
+source venv/bin/activate        # Windows: venv\Scripts\activate
+pip install -U pip
 pip install -r requirements.txt
 ```
 
-### 2. 启动应用
+> 不用虚拟环境也可以直接 `pip install -r requirements.txt`，但推荐隔离以避免污染系统环境。
+
+### 3. 启动应用
 
 ```bash
 python3 app.py
 ```
 
-或者运行启动脚本：
+或运行启动脚本(等价)：
 
 ```bash
 bash run.sh
 ```
 
-### 3. 打开浏览器
+服务默认监听 `0.0.0.0:5001`(`debug=True`)，因此**本机与同局域网设备**均可访问。
 
-在浏览器中打开：**http://127.0.0.1:5000**
+### 4. 打开浏览器
+
+- 本机：**http://127.0.0.1:5001**
+- 局域网其他设备：`http://<本机IP>:5001`
+
+> ⚠️ `debug=True` 仅适合本地/内网开发使用，请勿直接暴露到公网。
+
+### 5. 可选环境变量
+
+以下变量均有默认值，按需在启动前 `export`(或写入 shell 配置)即可：
+
+| 变量 | 用途 | 默认值 |
+|------|------|--------|
+| `DELIVERY_ROOT` | 交付项目数据根目录 | `/Volumes/大硬盘可劲用/DeepExplor/数据留存/交付数据` |
+| `RESULTS_ROOT` | 蚀变分析结果落盘目录 | 应用目录下 `results/` |
+| `MAX_RUNS_PER_DEPOSIT` | 每个矿床保留的历史结果数 | `30` |
+| `DEEPSEEK_API_KEY` | 矿床类型 LLM 推理(未设置则自动跳过该功能) | 空 |
+| `DEEPSEEK_MODEL` / `DEEPSEEK_BASE_URL` | LLM 模型名 / 接口地址 | `deepseek-chat` / `https://api.deepseek.com` |
+
+示例：
+
+```bash
+export DELIVERY_ROOT="/path/to/交付数据"
+export DEEPSEEK_API_KEY="sk-..."     # 仅在需要 LLM 辅助识别矿床类型时设置
+python3 app.py
+```
 
 ## 使用流程
 
