@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>大气校正 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #ffffff; }
+        .thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content { display: none; }
+    </style>
+</head>
+<body class="text-slate-900">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 bg-slate-50 rounded-lg text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="https://modao.cc/agent-py/media/generated_images/2026-05-11/a137a09a8875405f9892bb2f03fcb0d9.jpg#desc=User%20avatar"/>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-20 px-8 max-w-[800px] mx-auto">
+<div class="flex items-center gap-4 mb-8">
+<a class="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors" href="data_preprocessing.html">
+<iconify-icon icon="lucide:arrow-left"></iconify-icon>
+</a>
+<div>
+<h1 class="text-2xl font-bold tracking-tight">🌤 大气校正</h1>
+<nav class="flex text-xs text-slate-400 mt-1">
+<span>数据预处理</span>
+<span class="mx-2">/</span>
+<span class="text-slate-600">大气校正</span>
+</nav>
+</div>
+</div>
+<section class="space-y-8">
+<div class="p-8 border thin-border rounded-3xl bg-white space-y-6">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">校正方法</label>
+<div class="grid grid-cols-2 gap-4">
+<label class="p-4 border-2 border-black rounded-xl bg-slate-50 flex items-center gap-3 cursor-pointer">
+<input checked="" class="accent-black" name="atmos_method" type="radio"/>
+<span class="text-xs font-bold">DOS (暗目标消减)</span>
+</label>
+<label class="p-4 border thin-border rounded-xl flex items-center gap-3 cursor-pointer hover:bg-slate-50">
+<input class="accent-black" name="atmos_method" type="radio"/>
+<span class="text-xs font-bold">Simple (简化模型)</span>
+</label>
+</div>
+</div>
+<div class="grid grid-cols-2 gap-6 pt-4 border-t thin-border">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase">太阳天顶角 (度)</label>
+<input class="w-full p-2 border thin-border rounded-lg text-xs outline-none" type="number" value="45.2"/>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase">气溶胶类型</label>
+<select class="w-full p-2 border thin-border rounded-lg text-xs bg-white outline-none">
+<option>城市型 (Urban)</option>
+<option>乡村型 (Rural)</option>
+<option>海洋型 (Maritime)</option>
+</select>
+</div>
+</div>
+<div class="p-4 bg-blue-50/50 rounded-xl">
+<p class="text-[10px] text-blue-600 font-medium leading-relaxed">
+                        注意：对于高光谱影像，建议使用 DOS 算法以保证波谱曲线的连续性。
+                    </p>
+</div>
+<button class="w-full py-4 bg-black text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
+                    开始大气校正
+                </button>
+</div>
+</section>
+</main>
+</body>
+</html>

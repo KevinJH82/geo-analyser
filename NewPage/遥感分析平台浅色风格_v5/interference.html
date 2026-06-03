@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>干扰剔除 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #ffffff; }
+        .thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content { display: none; }
+    </style>
+</head>
+<body class="text-slate-900">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 bg-slate-50 rounded-lg text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="/agent-py/static/source/images/placeholder.svg"/>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-20 px-8 max-w-[800px] mx-auto">
+<div class="flex items-center gap-4 mb-8">
+<a class="w-10 h-10 rounded-full border border-slate-200 flex items-center justify-center hover:bg-slate-50 transition-colors" href="data_preprocessing.html">
+<iconify-icon icon="lucide:arrow-left"></iconify-icon>
+</a>
+<div>
+<h1 class="text-2xl font-bold tracking-tight">🧪 干扰剔除</h1>
+<nav class="flex text-xs text-slate-400 mt-1">
+<span>数据预处理</span>
+<span class="mx-2">/</span>
+<span class="text-slate-600">干扰剔除</span>
+</nav>
+</div>
+</div>
+<section class="space-y-8">
+<div class="p-8 border thin-border rounded-3xl bg-white space-y-6">
+<div class="space-y-4">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">干扰识别模式</label>
+<div class="grid grid-cols-1 gap-3">
+<label class="flex items-center justify-between p-4 border thin-border rounded-xl cursor-pointer hover:bg-slate-50">
+<div class="flex items-center gap-3">
+<iconify-icon class="text-emerald-500 text-lg" icon="lucide:sprout"></iconify-icon>
+<span class="text-xs font-bold">植被剔除 (NDVI 阈值法)</span>
+</div>
+<input checked="" class="accent-black" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between p-4 border thin-border rounded-xl cursor-pointer hover:bg-slate-50">
+<div class="flex items-center gap-3">
+<iconify-icon class="text-blue-500 text-lg" icon="lucide:droplets"></iconify-icon>
+<span class="text-xs font-bold">水体剔除 (NDWI 阈值法)</span>
+</div>
+<input checked="" class="accent-black" type="checkbox"/>
+</label>
+<label class="flex items-center justify-between p-4 border thin-border rounded-xl cursor-pointer hover:bg-slate-50">
+<div class="flex items-center gap-3">
+<iconify-icon class="text-slate-400 text-lg" icon="lucide:cloud"></iconify-icon>
+<span class="text-xs font-bold">云/雪掩膜</span>
+</div>
+<input checked="" class="accent-black" type="checkbox"/>
+</label>
+</div>
+</div>
+<div class="pt-4 border-t thin-border space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase">掩膜敏感度</label>
+<input class="w-full accent-black h-1" max="100" min="0" type="range" value="75"/>
+<div class="flex justify-between text-[10px] text-slate-400">
+<span>保守</span>
+<span>激进</span>
+</div>
+</div>
+<button class="w-full py-4 bg-black text-white rounded-xl text-sm font-bold hover:bg-slate-800 transition-all shadow-lg shadow-slate-200">
+                    启动干扰识别
+                </button>
+</div>
+</section>
+<div class="mt-8 p-6 bg-amber-50 rounded-2xl border border-amber-100">
+<div class="flex items-center gap-2 text-amber-700 mb-2">
+<iconify-icon icon="lucide:info"></iconify-icon>
+<span class="text-xs font-bold">处理建议</span>
+</div>
+<p class="text-[11px] text-amber-600/80 leading-relaxed">
+                在进行蚀变信息提取前，强烈建议先执行干扰剔除。未剔除的植被波谱可能会与铁氧化物蚀变特征产生混淆，导致虚假异常的出现。
+            </p>
+</div>
+</main>
+</body>
+</html>

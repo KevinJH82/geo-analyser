@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>蚀变异常检测 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<script src="/static/echarts.min.js"></script>
+<style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #ffffff; }
+        .thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+        .input-focus:focus { border-color: #000; outline: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.05); }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content { display: none; }
+    </style>
+</head>
+<body class="text-slate-900 min-h-screen">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="/agent-py/static/source/images/placeholder.svg"/>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-20 px-8 flex gap-8 h-[calc(100vh-64px)] overflow-hidden">
+<!-- 左侧：参数面板 -->
+<aside class="w-80 flex flex-col gap-6 overflow-y-auto pr-4 scrollbar-hide">
+<!-- 1. 数据上传 -->
+<section class="space-y-4">
+<h3 class="text-xs font-bold uppercase tracking-widest text-slate-400">数据输入</h3>
+<div class="p-6 border-2 border-dashed border-slate-100 rounded-2xl bg-slate-50/50 flex flex-col items-center justify-center text-center hover:border-slate-300 transition-colors cursor-pointer group">
+<iconify-icon class="text-2xl text-slate-300 mb-2 group-hover:text-slate-900 transition-colors" icon="lucide:upload-cloud"></iconify-icon>
+<p class="text-xs font-bold">浏览光谱文件</p>
+<p class="text-[10px] text-slate-400 mt-1">.tif / .npy / 波段目录</p>
+</div>
+<div class="p-4 border thin-border rounded-xl bg-white space-y-3">
+<p class="text-[10px] font-bold text-slate-400 uppercase">背景底图 (叠加渲染)</p>
+<div class="flex items-center justify-between p-2 border thin-border rounded bg-slate-50">
+<span class="text-[10px] truncate max-w-[120px]">base_map_001.jpg</span>
+<button class="text-rose-500"><iconify-icon class="text-xs" icon="lucide:x"></iconify-icon></button>
+</div>
+</div>
+</section>
+<!-- 2. 核心算法配置 -->
+<section class="space-y-4">
+<h3 class="text-xs font-bold uppercase tracking-widest text-slate-400">分析引擎配置</h3>
+<div class="space-y-4 p-4 border thin-border rounded-xl bg-white">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-500 uppercase">阈值确定方法</label>
+<select class="w-full p-2 text-xs border thin-border rounded bg-white input-focus appearance-none">
+<option>均值 + k · 标准差</option>
+<option>95% 百分位数</option>
+<option>动态分段法</option>
+</select>
+</div>
+<div class="space-y-2">
+<div class="flex justify-between items-center">
+<label class="text-[10px] font-bold text-slate-500 uppercase">标准差倍数 (k)</label>
+<span class="text-xs font-bold" id="kVal">2.5</span>
+</div>
+<input class="w-full accent-black h-1" max="5" min="1" oninput="document.getElementById('kVal').innerText=this.value" step="0.1" type="range" value="2.5"/>
+</div>
+</div>
+</section>
+<!-- 3. 可视化方案 -->
+<section class="space-y-4">
+<h3 class="text-xs font-bold uppercase tracking-widest text-slate-400">色彩方案</h3>
+<div class="grid grid-cols-2 gap-2">
+<button class="p-2 border border-black rounded flex items-center gap-2 text-[10px] font-bold bg-black text-white">
+<div class="w-3 h-3 bg-gradient-to-r from-red-500 via-orange-300 to-yellow-100 rounded-sm"></div> hot (红热)
+                    </button>
+<button class="p-2 border thin-border rounded flex items-center gap-2 text-[10px] font-bold hover:bg-slate-50">
+<div class="w-3 h-3 bg-gradient-to-r from-red-600 via-yellow-200 to-emerald-600 rounded-sm"></div> RdYlGn
+                    </button>
+<button class="p-2 border thin-border rounded flex items-center gap-2 text-[10px] font-bold hover:bg-slate-50">
+<div class="w-3 h-3 bg-gradient-to-r from-blue-700 via-cyan-400 to-red-500 rounded-sm"></div> jet (彩虹)
+                    </button>
+<button class="p-2 border thin-border rounded flex items-center gap-2 text-[10px] font-bold hover:bg-slate-50">
+<div class="w-3 h-3 bg-gradient-to-r from-indigo-700 to-pink-500 rounded-sm"></div> plasma
+                    </button>
+</div>
+</section>
+<button class="w-full mt-auto py-4 bg-black text-white rounded-xl text-xs font-bold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2">
+<iconify-icon icon="lucide:play"></iconify-icon> 执行分析任务
+</button>
+</aside>
+<!-- 右侧：工作区 -->
+<div class="flex-1 flex flex-col gap-6">
+<!-- 主预览 -->
+<div class="flex-1 bg-slate-50 rounded-2xl border thin-border overflow-hidden relative group">
+<div class="absolute inset-0 flex flex-col items-center justify-center text-slate-300">
+<iconify-icon class="text-6xl mb-4" icon="lucide:image"></iconify-icon>
+<p class="text-sm font-medium">配置参数后点击“执行分析”预览结果</p>
+</div>
+<!-- 结果图占位 -->
+<img alt="Alteration Map" class="w-full h-full object-cover opacity-60" src="/agent-py/static/source/images/placeholder.svg"/>
+<!-- 悬浮工具栏 -->
+<div class="absolute top-6 right-6 flex flex-col gap-2">
+<button class="w-10 h-10 bg-white shadow-xl rounded-lg border thin-border flex items-center justify-center hover:scale-105 transition-transform">
+<iconify-icon class="text-slate-600" icon="lucide:zoom-in"></iconify-icon>
+</button>
+<button class="w-10 h-10 bg-white shadow-xl rounded-lg border thin-border flex items-center justify-center hover:scale-105 transition-transform">
+<iconify-icon class="text-slate-600" icon="lucide:zoom-out"></iconify-icon>
+</button>
+</div>
+<div class="absolute bottom-6 left-6 p-4 bg-white/80 backdrop-blur rounded-xl border thin-border shadow-sm max-w-xs">
+<p class="text-xs font-bold mb-2">结果统计图表</p>
+<div class="w-full h-32" id="statChart"></div>
+</div>
+</div>
+<!-- 底部日志与导出 -->
+<div class="h-48 bg-white rounded-2xl border thin-border p-6 flex gap-8">
+<div class="flex-1 overflow-y-auto pr-4 space-y-2">
+<p class="text-[10px] font-bold text-slate-400 uppercase sticky top-0 bg-white pb-2">操作日志</p>
+<div class="text-[10px] font-mono text-slate-500 space-y-1">
+<p class="text-emerald-500">[2026-05-11 09:20:12] 系统初始化完成。</p>
+<p>[2026-05-11 09:21:05] 读取底图文件 base_map_001.jpg 成功。</p>
+<p class="text-amber-500">[2026-05-11 09:22:30] 注意：光谱数据包含 224 个波段，建议选择核心波段优化。</p>
+</div>
+</div>
+<div class="w-px bg-slate-100 h-full"></div>
+<div class="w-64 flex flex-col justify-between">
+<div>
+<p class="text-xs font-bold mb-1">导出选项</p>
+<p class="text-[10px] text-slate-400 mb-4">生成标准地理信息成果文件。</p>
+</div>
+<div class="grid grid-cols-2 gap-2">
+<button class="py-2 border thin-border rounded text-[10px] font-bold hover:bg-slate-50">下载 .TIF</button>
+<button class="py-2 border thin-border rounded text-[10px] font-bold hover:bg-slate-50">导出报告</button>
+</div>
+</div>
+</div>
+</div>
+</main>
+<script>
+        const chart = echarts.init(document.getElementById('statChart'));
+        const option = {
+            animation: false,
+            grid: { top: 5, right: 5, bottom: 20, left: 20 },
+            xAxis: { type: 'category', data: ['0', '1', '2', '3', '4', '5'], axisLabel: { fontSize: 8 } },
+            yAxis: { type: 'value', axisLabel: { fontSize: 8 }, splitLine: { show: false } },
+            series: [{
+                data: [120, 200, 150, 80, 70, 110],
+                type: 'bar',
+                itemStyle: { color: '#000' }
+            }]
+        };
+        chart.setOption(option);
+    </script>
+</body>
+</html>

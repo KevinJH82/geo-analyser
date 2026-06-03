@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>InSAR 形变分析 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<style>
+  body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #ffffff; }
+  .thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+  .input-focus:focus { border-color: #000; outline: none; box-shadow: 0 0 0 2px rgba(0,0,0,0.05); }
+  .nav-dropdown:hover .nav-dropdown-content { display: block; }
+  .nav-dropdown-content { display: none; }
+  .pill { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 9999px; font-size: 11px; font-weight: 500; }
+</style>
+</head>
+<body class="text-slate-900 min-h-screen">
+
+<!-- 顶部导航(与其他页一致) -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+<a class="text-slate-900 transition-colors" href="deformation.html">InSAR 形变分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<a href="http://192.168.112.18/2nd%20Page/index.html" class="flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-900 transition-colors">
+<iconify-icon icon="lucide:arrow-left"></iconify-icon>
+<span>返回上一级</span>
+</a>
+</div>
+</nav>
+
+<!-- 主体 -->
+<main class="pt-24 px-8 max-w-7xl mx-auto">
+
+<!-- 标题 -->
+<header class="mb-6">
+<div class="flex items-center gap-3 mb-2">
+<div class="w-10 h-10 rounded-xl bg-purple-100 flex items-center justify-center">
+<iconify-icon class="text-purple-600 text-xl" icon="lucide:radar"></iconify-icon>
+</div>
+<h1 class="text-2xl font-semibold tracking-tight">InSAR 形变分析</h1>
+</div>
+<p class="text-sm text-slate-500 leading-relaxed">基于 geo-insar 输出的干涉对堆栈,做时序速率反演、活跃形变区识别、形变-矿物联合异常分析。</p>
+</header>
+
+<!-- AOI 选择 -->
+<section class="thin-border border rounded-2xl p-6 mb-6 bg-white">
+<div class="flex items-center justify-between mb-4">
+<h3 class="text-base font-semibold flex items-center gap-2">
+<iconify-icon class="text-purple-500" icon="lucide:folder-search"></iconify-icon>
+可用堆栈 (从 geo-insar 标准输出订阅)
+</h3>
+<button id="btn-refresh" class="text-xs text-slate-500 hover:text-slate-900 flex items-center gap-1">
+<iconify-icon icon="lucide:refresh-cw"></iconify-icon>刷新
+</button>
+</div>
+<div id="stacks-list" class="space-y-2 text-sm">扫描中…</div>
+</section>
+
+<!-- 分析参数 -->
+<section class="thin-border border rounded-2xl p-6 mb-6 bg-white">
+<h3 class="text-base font-semibold mb-4 flex items-center gap-2">
+<iconify-icon class="text-purple-500" icon="lucide:sliders-horizontal"></iconify-icon>
+分析参数
+</h3>
+<div class="grid grid-cols-1 md:grid-cols-4 gap-4 text-sm">
+<div>
+<label class="text-xs text-slate-500">分析模式</label>
+<select id="mode" class="w-full px-3 py-2 border border-slate-200 rounded-lg input-focus">
+<option value="velocity_cluster">活跃形变区聚类</option>
+<option value="coherence_stability">相干性稳定性</option>
+<option value="fusion_mineral">形变-矿物联合</option>
+<option value="timeseries">时序速率反演</option>
+</select>
+</div>
+<div>
+<label class="text-xs text-slate-500">速率阈值 (mm/yr)</label>
+<input id="v-thr" type="number" value="5.0" step="0.5" class="w-full px-3 py-2 border border-slate-200 rounded-lg input-focus">
+</div>
+<div>
+<label class="text-xs text-slate-500">相干性阈值</label>
+<input id="c-thr" type="number" value="0.3" step="0.05" min="0" max="1" class="w-full px-3 py-2 border border-slate-200 rounded-lg input-focus">
+</div>
+<div>
+<label class="text-xs text-slate-500">矿物异常 GeoTIFF(联合模式)</label>
+<input id="mineral-path" type="text" placeholder="(可选)/path/to/mineral.tif" class="w-full px-3 py-2 border border-slate-200 rounded-lg input-focus">
+</div>
+</div>
+<div class="mt-4 flex gap-3">
+<button id="btn-run" class="px-5 py-2 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors flex items-center gap-2">
+<iconify-icon icon="lucide:play"></iconify-icon>运行分析
+</button>
+<span id="status" class="text-xs text-slate-500 self-center"></span>
+</div>
+</section>
+
+<!-- 结果 -->
+<section class="thin-border border rounded-2xl p-6 mb-12 bg-white">
+<h3 class="text-base font-semibold mb-4 flex items-center gap-2">
+<iconify-icon class="text-purple-500" icon="lucide:bar-chart-3"></iconify-icon>
+分析结果
+</h3>
+<div id="result-area" class="text-sm text-slate-500">尚未运行。选择上方堆栈并点 "运行分析"。</div>
+</section>
+
+</main>
+
+<script>
+let selectedAoi = null;
+
+async function refreshStacks() {
+  const list = document.getElementById('stacks-list');
+  list.innerHTML = '扫描中…';
+  try {
+    const r = await fetch('/api/insar/stacks');
+    const j = await r.json();
+    const stacks = j.stacks || [];
+    if (!stacks.length) {
+      list.innerHTML = `<div class="text-slate-400">geo-insar 输出目录暂无堆栈。先在 <code>geo-insar</code> 提交 HyP3 任务,等产物落盘后再来。</div>`;
+      return;
+    }
+    list.innerHTML = stacks.map(s => `
+      <label class="flex items-center justify-between p-3 border border-slate-100 rounded-xl hover:bg-slate-50 cursor-pointer">
+        <div class="flex items-center gap-3">
+          <input type="radio" name="aoi" value="${s.aoi_name}" class="accent-purple-600">
+          <div>
+            <div class="font-medium">${s.aoi_name}</div>
+            <div class="text-xs text-slate-500">${s.n_pairs} 对 · ${s.date_range?.[0]||'?'} ~ ${s.date_range?.[1]||'?'}</div>
+          </div>
+        </div>
+        <span class="pill bg-purple-50 text-purple-700">${s.stack_index_path ? '已索引' : '原始'}</span>
+      </label>
+    `).join('');
+    document.querySelectorAll('input[name="aoi"]').forEach(el => {
+      el.addEventListener('change', () => { selectedAoi = el.value; });
+    });
+  } catch (e) {
+    list.innerHTML = `<div class="text-red-500">扫描失败: ${e}</div>`;
+  }
+}
+
+document.getElementById('btn-refresh').onclick = refreshStacks;
+refreshStacks();
+
+document.getElementById('btn-run').onclick = async () => {
+  if (!selectedAoi) { alert('请先选择一个 AOI'); return; }
+  const mode = document.getElementById('mode').value;
+  const status = document.getElementById('status');
+  const area = document.getElementById('result-area');
+  status.textContent = '运行中…';
+  area.innerHTML = '<div class="text-slate-400">处理中,大堆栈可能要几十秒</div>';
+
+  const payload = {
+    aoi_name: selectedAoi,
+    mode: mode,
+    velocity_threshold_mm_year: parseFloat(document.getElementById('v-thr').value),
+    coherence_threshold: parseFloat(document.getElementById('c-thr').value),
+    mineral_anomaly_path: document.getElementById('mineral-path').value || null,
+  };
+
+  try {
+    let url = '/api/insar/analyze';
+    if (mode === 'timeseries') {
+      url = '/api/insar/timeseries';
+    }
+    const r = await fetch(url, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)});
+    const j = await r.json();
+    status.textContent = '';
+    if (j.error) {
+      area.innerHTML = `<div class="text-red-500">${j.error}</div>`;
+      return;
+    }
+    const statsHtml = Object.entries(j.stats || j.velocity_stats || {}).map(([k,v]) =>
+      `<tr class="border-b border-slate-100"><td class="py-1 pr-3 font-mono text-xs">${k}</td><td class="py-1 text-xs text-slate-600">${typeof v === 'number' ? v.toFixed(4) : v}</td></tr>`
+    ).join('');
+    area.innerHTML = `
+      <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        <div>
+          ${j.image_b64 ? `<img src="data:image/png;base64,${j.image_b64}" class="rounded-lg border border-slate-100">` : '<div class="text-slate-400">无图像输出</div>'}
+        </div>
+        <div>
+          <h4 class="font-semibold mb-2">${j.name || mode}</h4>
+          ${j.unit ? `<div class="text-xs text-slate-500 mb-2">单位: ${j.unit}</div>` : ''}
+          <table class="w-full">${statsHtml||'<tr><td class="text-slate-400">无统计</td></tr>'}</table>
+          ${j.coherence_decay ? `<div class="mt-4 text-xs"><b>相干性衰减时间常数 τ:</b> ${j.coherence_decay.tau_days ? j.coherence_decay.tau_days.toFixed(1)+' 天' : '—'}</div>` : ''}
+        </div>
+      </div>`;
+  } catch (e) {
+    status.textContent = '';
+    area.innerHTML = `<div class="text-red-500">请求失败: ${e}</div>`;
+  }
+};
+</script>
+</body>
+</html>

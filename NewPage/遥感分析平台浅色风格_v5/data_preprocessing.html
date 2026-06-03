@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>数据预处理 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<script src="/static/echarts.min.js"></script>
+<style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #ffffff;
+            color: #0f172a;
+        }
+        .btn-primary {
+            background-color: #0f172a;
+            color: white;
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #334155;
+            transform: translateY(-1px);
+        }
+        .nav-dropdown:hover .nav-dropdown-content {
+            display: block;
+        }
+        .nav-dropdown-content {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen bg-slate-50/30">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4">
+<a class="text-slate-900 flex items-center gap-1" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 nav-dropdown-content">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="https://modao.cc/agent-py/media/generated_images/2026-05-11/c38e1b09de004bd8aabbb56a4a9eaf95.jpg#desc=User%20avatar"/>
+</div>
+</div>
+</nav>
+<!-- 主容器 -->
+<main class="pt-24 pb-12 px-8 max-w-[1200px] mx-auto">
+<header class="mb-12">
+<div class="flex items-center gap-2 text-slate-400 text-sm mb-4">
+<a class="hover:text-slate-900" href="index.html">首页</a>
+<iconify-icon class="text-xs" icon="lucide:chevron-right"></iconify-icon>
+<span class="text-slate-900">数据预处理</span>
+</div>
+<h1 class="text-3xl font-bold tracking-tight mb-2">数据预处理</h1>
+<p class="text-slate-500">对原始高光谱影像进行基础处理，消除环境与传感器因素带来的噪声与畸变。</p>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+<!-- 大气校正 -->
+<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+<div class="w-14 h-14 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center mb-6">
+<iconify-icon class="text-3xl" icon="lucide:cloud-sun"></iconify-icon>
+</div>
+<h3 class="text-xl font-bold mb-3">大气校正</h3>
+<p class="text-slate-500 text-sm leading-relaxed mb-8">采用辐射传输模型或暗目标法，消除大气散射、吸收对地物光谱反射率的影响。</p>
+<a class="w-full py-3 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2" href="atmospheric.html">
+                    进入模块 <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+</a>
+</div>
+<!-- 几何校正 -->
+<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+<div class="w-14 h-14 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center mb-6">
+<iconify-icon class="text-3xl" icon="lucide:grid-3x3"></iconify-icon>
+</div>
+<h3 class="text-xl font-bold mb-3">几何校正</h3>
+<p class="text-slate-500 text-sm leading-relaxed mb-8">利用控制点或参考影像，消除传感器姿态及地表起伏引起的几何畸变。</p>
+<a class="w-full py-3 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2" href="geometric.html">
+                    进入模块 <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+</a>
+</div>
+<!-- 干扰剔除 -->
+<div class="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm hover:shadow-md transition-shadow">
+<div class="w-14 h-14 bg-teal-50 text-teal-600 rounded-2xl flex items-center justify-center mb-6">
+<iconify-icon class="text-3xl" icon="lucide:filter"></iconify-icon>
+</div>
+<h3 class="text-xl font-bold mb-3">干扰剔除</h3>
+<p class="text-slate-500 text-sm leading-relaxed mb-8">自动识别并剔除植被、水体、云层等对岩石矿物光谱提取产生干扰的非目标要素。</p>
+<a class="w-full py-3 border border-slate-200 rounded-xl text-sm font-semibold hover:bg-slate-50 transition-colors flex items-center justify-center gap-2" href="interference.html">
+                    进入模块 <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+</a>
+</div>
+</div>
+</main>
+</body>
+</html>

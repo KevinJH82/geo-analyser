@@ -1,0 +1,208 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>尖点突破分析 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<script src="/static/echarts.min.js"></script>
+<style>
+        body { font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #ffffff; }
+        .thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+        .nav-dropdown:hover .nav-dropdown-content { display: block; }
+        .nav-dropdown-content { display: none; }
+    </style>
+</head>
+<body class="text-slate-900 overflow-x-hidden min-h-screen">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote</span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-500 hover:text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="https://modao.cc/agent-py/media/generated_images/2026-05-11/839bab96e056426d8938ac3d2dff64da.jpg#desc=User%20avatar"/>
+</div>
+</div>
+</nav>
+<main class="pt-24 pb-20 px-8 max-w-[1440px] mx-auto grid grid-cols-12 gap-8">
+<!-- 侧边栏参数 -->
+<aside class="col-span-12 lg:col-span-3 space-y-6">
+<div class="p-6 bg-white border thin-border rounded-2xl space-y-6">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase tracking-widest">聚类分析引擎</label>
+<div class="grid grid-cols-1 gap-2">
+<button class="p-3 border-2 border-black rounded-xl text-left flex items-center gap-3">
+<iconify-icon class="text-xl" icon="lucide:boxes"></iconify-icon>
+<div>
+<p class="text-xs font-bold">DBSCAN 聚类</p>
+<p class="text-[10px] text-slate-400">基于密度的抗噪声聚类</p>
+</div>
+</button>
+<button class="p-3 border thin-border rounded-xl text-left flex items-center gap-3 hover:bg-slate-50 transition-colors">
+<iconify-icon class="text-xl text-slate-400" icon="lucide:network"></iconify-icon>
+<div>
+<p class="text-xs font-bold">层次聚类</p>
+<p class="text-[10px] text-slate-400">多尺度拓扑分析结构</p>
+</div>
+</button>
+</div>
+</div>
+<div class="space-y-4 pt-4 border-t thin-border">
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase">突破区最小像元数</label>
+<input class="w-full p-2 text-xs border thin-border rounded-lg outline-none focus:border-rose-500 transition-colors" type="number" value="10"/>
+</div>
+<div class="space-y-2">
+<label class="text-[10px] font-bold text-slate-400 uppercase">色彩方案映射</label>
+<select class="w-full p-2 text-xs border thin-border rounded-lg bg-white outline-none">
+<option>hot (红热)</option>
+<option>YlOrRd (黄橙红)</option>
+<option>plasma</option>
+<option>Reds (深红)</option>
+</select>
+</div>
+</div>
+</div>
+<div class="p-6 bg-slate-900 text-white rounded-2xl">
+<div class="flex items-center gap-2 mb-4">
+<iconify-icon class="text-emerald-400" icon="lucide:shield-check"></iconify-icon>
+<span class="text-xs font-bold uppercase tracking-widest">智能建议</span>
+</div>
+<p class="text-xs text-slate-400 leading-relaxed">
+                    当前影像噪声水平较低，建议将“最小像元数”设置在 8-15 之间以获得更精准的突破靶区中心。
+                </p>
+</div>
+<button class="w-full py-4 bg-rose-600 text-white rounded-2xl text-xs font-bold hover:bg-rose-700 transition-all flex items-center justify-center gap-2 shadow-lg shadow-rose-100">
+<iconify-icon icon="lucide:target"></iconify-icon> 启动靶区识别
+            </button>
+</aside>
+<!-- 主内容区 -->
+<div class="col-span-12 lg:col-span-9 space-y-8">
+<!-- 分析画布 -->
+<div class="bg-white border thin-border rounded-3xl p-8 aspect-[16/9] flex flex-col items-center justify-center relative overflow-hidden group">
+<div class="w-full h-full" id="breakthroughCanvas"></div>
+<!-- 底部统计浮条 -->
+<div class="absolute bottom-8 left-8 right-8 p-6 bg-white/90 backdrop-blur border thin-border rounded-2xl shadow-xl flex justify-between items-center translate-y-4 opacity-0 group-hover:translate-y-0 group-hover:opacity-100 transition-all">
+<div class="flex gap-12">
+<div>
+<p class="text-[10px] font-bold text-slate-400 uppercase">识别靶区</p>
+<p class="text-xl font-bold">24</p>
+</div>
+<div>
+<p class="text-[10px] font-bold text-slate-400 uppercase">平均置信度</p>
+<p class="text-xl font-bold text-emerald-500">92%</p>
+</div>
+<div>
+<p class="text-[10px] font-bold text-slate-400 uppercase">覆盖面积</p>
+<p class="text-xl font-bold">1.4 km²</p>
+</div>
+</div>
+<button class="px-6 py-2 bg-slate-900 text-white rounded-lg text-xs font-bold">导出靶区 Shapefile</button>
+</div>
+</div>
+<!-- 数据下钻展示 -->
+<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+<div class="bg-white border thin-border rounded-2xl p-6">
+<h3 class="text-sm font-bold mb-6">靶区密度热力分布</h3>
+<div class="w-full h-64" id="densityChart"></div>
+</div>
+<div class="bg-white border thin-border rounded-2xl p-6">
+<h3 class="text-sm font-bold mb-6">高价值靶区排名</h3>
+<div class="space-y-4">
+<div class="flex items-center justify-between p-3 bg-slate-50 rounded-xl">
+<div class="flex items-center gap-3">
+<span class="w-6 h-6 rounded-full bg-rose-600 text-white text-[10px] flex items-center justify-center font-bold">01</span>
+<span class="text-xs font-bold">A-024 核心蚀变带</span>
+</div>
+<span class="text-xs font-mono text-slate-500">Score: 98.2</span>
+</div>
+<div class="flex items-center justify-between p-3 hover:bg-slate-50 transition-colors cursor-pointer rounded-xl">
+<div class="flex items-center gap-3">
+<span class="w-6 h-6 rounded-full bg-slate-200 text-slate-600 text-[10px] flex items-center justify-center font-bold">02</span>
+<span class="text-xs font-bold">B-112 次生晕扩散区</span>
+</div>
+<span class="text-xs font-mono text-slate-500">Score: 84.5</span>
+</div>
+</div>
+<button class="w-full mt-4 py-2 text-xs font-bold text-slate-400 hover:text-black transition-colors">查看全部靶区详情</button>
+</div>
+</div>
+</div>
+</main>
+<script>
+        const canvas = echarts.init(document.getElementById('breakthroughCanvas'));
+        const density = echarts.init(document.getElementById('densityChart'));
+
+        const data = [];
+        for(let i=0; i<100; i++) {
+            data.push([Math.random()*10, Math.random()*10, Math.random()*50]);
+        }
+
+        canvas.setOption({
+            tooltip: {},
+            xAxis: { show: false, min: 0, max: 10 },
+            yAxis: { show: false, min: 0, max: 10 },
+            series: [{
+                type: 'scatter',
+                data: data,
+                symbolSize: function(d) { return d[2]; },
+                itemStyle: {
+                    color: '#f43f5e',
+                    opacity: 0.1,
+                    borderColor: '#f43f5e',
+                    borderWidth: 1
+                },
+                animationDelay: function (idx) { return idx * 10; }
+            }]
+        });
+
+        density.setOption({
+            tooltip: { trigger: 'item' },
+            series: [{
+                type: 'pie',
+                radius: ['40%', '70%'],
+                avoidLabelOverlap: false,
+                itemStyle: { borderRadius: 10, borderColor: '#fff', borderWidth: 2 },
+                label: { show: false },
+                data: [
+                    { value: 1048, name: '铁氧化物', itemStyle: { color: '#e11d48' } },
+                    { value: 735, name: 'Al-OH', itemStyle: { color: '#f43f5e' } },
+                    { value: 580, name: 'Mg-OH', itemStyle: { color: '#fda4af' } }
+                ]
+            }]
+        });
+
+        window.addEventListener('resize', () => {
+            canvas.resize();
+            density.resize();
+        });
+    </script>
+</body>
+</html>

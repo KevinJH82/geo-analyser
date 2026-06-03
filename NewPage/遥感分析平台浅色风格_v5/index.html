@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>灵境遥感智能分析平台 - VisionRemote</title>
+<script src="/static/tailwindcss.js"></script>
+<script src="/static/iconify-icon.min.js"></script>
+<script src="/static/echarts.min.js"></script>
+<style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background-color: #ffffff;
+            color: #0f172a;
+        }
+        .btn-primary {
+            background-color: #0f172a;
+            color: white;
+            transition: all 0.2s ease;
+        }
+        .btn-primary:hover {
+            background-color: #334155;
+            transform: translateY(-1px);
+        }
+        .nav-dropdown:hover .nav-dropdown-content {
+            display: block;
+        }
+        .nav-dropdown-content {
+            display: none;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+<!-- 导航栏 -->
+<nav class="fixed top-0 w-full h-16 border-b border-slate-100 bg-white/80 backdrop-blur-md z-50 flex items-center justify-between px-8">
+<div class="flex items-center gap-8">
+<a class="flex items-center gap-3" href="index.html">
+<div class="w-8 h-8 bg-slate-900 rounded-lg flex items-center justify-center">
+<iconify-icon class="text-white text-lg" icon="lucide:layers"></iconify-icon>
+</div>
+<span class="font-semibold text-lg tracking-tight">VisionRemote <span class="text-slate-400 font-light text-sm ml-2">v2.4.0</span></span>
+</a>
+<div class="hidden md:flex items-center gap-6 text-sm font-medium">
+<div class="relative nav-dropdown py-4 group">
+<a class="text-slate-900 flex items-center gap-1 transition-colors" href="data_preprocessing.html">
+                        数据预处理 <iconify-icon class="text-xs" icon="lucide:chevron-down"></iconify-icon>
+</a>
+<div class="absolute top-14 left-0 w-48 bg-white border border-slate-100 shadow-xl rounded-xl p-2 hidden group-hover:block z-50">
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="atmospheric.html">大气校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="geometric.html">几何校正</a>
+<a class="block px-4 py-2 hover:bg-slate-50 rounded-lg text-slate-600 hover:text-slate-900 transition-colors" href="interference.html">干扰剔除</a>
+</div>
+</div>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="alteration.html">蚀变异常检测</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="breakthrough.html">尖点突破分析</a>
+<a class="text-slate-500 hover:text-slate-900 transition-colors" href="deformation.html">InSAR 形变分析</a>
+</div>
+</div>
+<div class="flex items-center gap-6">
+<div class="flex flex-col items-end text-xs text-slate-500">
+<span>当前日期: 2026年05月11日</span>
+<span>坐标系: WGS 84 / UTM zone 50N</span>
+</div>
+<div class="h-8 w-[1px] bg-slate-100 mx-2"></div>
+<button class="text-slate-600 hover:text-slate-900 transition-colors">
+<iconify-icon class="text-xl" icon="lucide:bell"></iconify-icon>
+</button>
+<div class="w-8 h-8 rounded-full bg-slate-100 border border-slate-200 overflow-hidden">
+<img alt="User avatar" class="w-full h-full object-cover" src="https://modao.cc/agent-py/media/generated_images/2026-05-11/b2f064a53df14b6e9d846ca3e082c046.jpg#desc=User%20avatar"/>
+</div>
+</div>
+</nav>
+<!-- 主容器 -->
+<main class="pt-24 pb-12 px-8 max-w-[1600px] mx-auto">
+<header class="mb-10">
+<h1 class="text-3xl font-medium tracking-tight mb-2">项目概览</h1>
+<p class="text-slate-500">欢迎回来，今日已完成 12 次高光谱影像分析任务。</p>
+</header>
+<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 mb-12">
+<!-- 数据预处理 -->
+<div class="p-8 rounded-3xl border border-slate-100 hover:border-slate-300 transition-all group bg-white shadow-sm hover:shadow-md">
+<div class="flex justify-between items-start mb-6">
+<div class="p-4 rounded-2xl bg-blue-50 text-blue-600">
+<iconify-icon class="text-3xl" icon="lucide:settings-2"></iconify-icon>
+</div>
+</div>
+<h3 class="text-xl font-bold mb-3">数据预处理</h3>
+<p class="text-sm text-slate-500 leading-relaxed mb-8">集成大气校正、几何校正及干扰剔除功能，为后续分析提供标准化的高质量反射率数据。</p>
+<a class="w-full py-3 bg-slate-50 text-slate-900 rounded-xl text-sm font-semibold hover:bg-slate-100 transition-colors flex items-center justify-center gap-2" href="data_preprocessing.html">
+                    进入预处理中心 <iconify-icon icon="lucide:arrow-right"></iconify-icon>
+</a>
+</div>
+<!-- 蚀变异常检测 -->
+<div class="p-8 rounded-3xl border border-slate-100 hover:border-slate-300 transition-all group bg-white shadow-sm hover:shadow-md">
+<div class="flex justify-between items-start mb-6">
+<div class="p-4 rounded-2xl bg-amber-50 text-amber-600">
+<iconify-icon class="text-3xl" icon="lucide:microscope"></iconify-icon>
+</div>
+</div>
+<h3 class="text-xl font-bold mb-3">蚀变异常检测</h3>
+<p class="text-sm text-slate-500 leading-relaxed mb-8">通过波谱特征提取与阈值分割技术，识别铁氧化物、羟基矿物及碳酸盐等关键矿物蚀变信息。</p>
+<a class="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2" href="alteration.html">
+                    启动蚀变分析 <iconify-icon icon="lucide:zap"></iconify-icon>
+</a>
+</div>
+<!-- 尖点突破分析 -->
+<div class="p-8 rounded-3xl border border-slate-100 hover:border-slate-300 transition-all group bg-white shadow-sm hover:shadow-md">
+<div class="flex justify-between items-start mb-6">
+<div class="p-4 rounded-2xl bg-rose-50 text-rose-600">
+<iconify-icon class="text-3xl" icon="lucide:target"></iconify-icon>
+</div>
+</div>
+<h3 class="text-xl font-bold mb-3">尖点突破分析</h3>
+<p class="text-sm text-slate-500 leading-relaxed mb-8">基于聚类算法识别蚀变异常分布的极值点与集中区，快速锁定找矿靶区与地学突破点。</p>
+<a class="w-full py-3 bg-slate-900 text-white rounded-xl text-sm font-semibold hover:bg-slate-800 transition-colors flex items-center justify-center gap-2" href="breakthrough.html">
+                    启动突破识别 <iconify-icon icon="lucide:crosshair"></iconify-icon>
+</a>
+</div>
+</div>
+<!-- 数据统计概览 -->
+<section class="grid grid-cols-1 gap-8">
+<div class="bg-white p-8 rounded-3xl border border-slate-100">
+<h4 class="font-bold text-lg mb-8">最近活动</h4>
+<div class="space-y-6">
+<div class="flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+<div class="w-12 h-12 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+<iconify-icon class="text-xl" icon="lucide:file-check"></iconify-icon>
+</div>
+<div class="flex-1 overflow-hidden">
+<p class="text-sm font-bold truncate">GF5_Western_Plateau_2026.tif</p>
+<p class="text-xs text-slate-400">蚀变异常分析已完成 · 2小时前</p>
+</div>
+<button class="text-slate-400 hover:text-slate-900"><iconify-icon icon="lucide:download"></iconify-icon></button>
+</div>
+<div class="flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+<div class="w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center text-blue-600 shrink-0">
+<iconify-icon class="text-xl" icon="lucide:refresh-cw"></iconify-icon>
+</div>
+<div class="flex-1 overflow-hidden">
+<p class="text-sm font-bold truncate">Landsat8_Pre_Processing_Batch_04</p>
+<p class="text-xs text-slate-400">大气校正进行中 (78%) · 5小时前</p>
+</div>
+</div>
+<div class="flex items-center gap-4 p-4 rounded-2xl hover:bg-slate-50 transition-colors">
+<div class="w-12 h-12 rounded-xl bg-slate-100 flex items-center justify-center text-slate-400 shrink-0">
+<iconify-icon class="text-xl" icon="lucide:bell"></iconify-icon>
+</div>
+<div class="flex-1 overflow-hidden">
+<p class="text-sm font-bold truncate">波谱库更新</p>
+<p class="text-xs text-slate-400">已同步 2026 年度矿物诊断波谱数据 · 昨天</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+</main>
+<script>
+        window.onload = () => {
+            // 仪表盘初始化逻辑
+        };
+    </script>
+</body>
+</html>

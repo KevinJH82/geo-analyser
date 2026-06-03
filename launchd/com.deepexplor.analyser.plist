@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>com.deepexplor.analyser</string>
+    <key>ProgramArguments</key>
+    <array>
+        <string>/opt/deepexplor-services/geo-analyser/venv/bin/python3</string>
+        <string>app.py</string>
+    </array>
+    <key>WorkingDirectory</key>
+    <string>/opt/deepexplor-services/geo-analyser</string>
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>PATH</key>
+        <string>/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin</string>
+        <key>GDAL_CONFIG</key>
+        <string>/opt/homebrew/bin/gdal-config</string>
+        <key>HOME</key>
+        <string>/Users/demacmini</string>
+        <key>LANG</key>
+        <string>zh_CN.UTF-8</string>
+    </dict>
+    <key>RunAtLoad</key>
+    <true/>
+    <key>KeepAlive</key>
+    <true/>
+    <key>StandardOutPath</key>
+    <string>/Users/demacmini/Library/Logs/deepexplor-analyser.log</string>
+    <key>StandardErrorPath</key>
+    <string>/Users/demacmini/Library/Logs/deepexplor-analyser-error.log</string>
+    <key>LimitLoadToSessionType</key>
+    <string>Aqua</string>
+</dict>
+</plist>

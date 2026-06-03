@@ -1,0 +1,30 @@
+# ── Python ──
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ── 虚拟环境 ──
+venv/
+.venv/
+env/
+
+# ── 系统 / 编辑器 ──
+.DS_Store
+.claude/
+
+# ── 备份文件 ──
+*.bak
+*.bak.*
+
+# ── 大体量数据 / 运行产物(可由代码或外部驱动重建,不入库)──
+# 蚀变分析落盘结果(GeoTIFF/PNG/manifest),自动生成
+results/
+# 生成的掩膜
+output_masks/
+# 生成的报告
+reports/
+# generate_demo_data.py 生成的演示数据
+demo_data/
+# 测试用大体量影像
+test data/

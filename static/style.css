@@ -1,0 +1,78 @@
+/* ═══════════════════════════════════════════
+   VisionRemote — 浅色风格 v5 补充样式
+   Layout & components use Tailwind CSS classes.
+   This file covers only what Tailwind can't express.
+═══════════════════════════════════════════ */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
+
+body {
+    font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background-color: #ffffff;
+    color: #0f172a;
+}
+
+/* 0.5px borders — Tailwind minimum is 1px */
+.thin-border { border-width: 0.5px; border-color: #f1f5f9; }
+.border-b-thin  { border-bottom: 0.5px solid #f1f5f9; }
+.border-t-thin  { border-top: 0.5px solid #f1f5f9; }
+
+/* Nav dropdown */
+.nav-dropdown:hover .nav-dropdown-content { display: block; }
+.nav-dropdown-content { display: none; }
+
+/* Module panel visibility */
+.module-panel { display: none; }
+.module-panel.active { display: block; }
+
+/* View visibility */
+#dashboard-view,
+#preprocessing-view { display: none; }
+#dashboard-view.active,
+#preprocessing-view.active { display: block; }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: #cbd5e1; }
+
+/* Hide scrollbar for sidebar */
+.scrollbar-hide::-webkit-scrollbar { display: none; }
+.scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* Progress bar */
+.progress-fill {
+    height: 100%;
+    background: #0f172a;
+    width: 0%;
+    transition: width 0.3s;
+    border-radius: 2px;
+}
+
+/* Log container monospace */
+.log-container {
+    font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+    font-size: 11px;
+    line-height: 1.6;
+}
+
+/* Browse modal */
+#browseModal {
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.4);
+    backdrop-filter: blur(4px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+/* Toggle switch (for geometric correction) */
+.toggle-checkbox:checked + .toggle-bg { background: #0f172a; }
+.toggle-checkbox:checked + .toggle-bg .toggle-dot { transform: translateX(100%); }
+
+/* Form focus */
+input:focus, select:focus { outline: none; }
+.input-focus:focus { border-color: #000; box-shadow: 0 0 0 2px rgba(0,0,0,0.05); }
