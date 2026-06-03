@@ -28,3 +28,6 @@ reports/
 demo_data/
 # 测试用大体量影像
 test data/
+
+# 压缩包不入库
+*.zip
