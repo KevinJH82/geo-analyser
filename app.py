@@ -1324,6 +1324,13 @@ def api_recommend_targets():
                     if ps.get("ratio_available") or ps.get("pca_available"):
                         effective = s
                         break
+        # 高光谱兜底:多光谱无可用项时,若项目有 EnMAP/PRISMA 且该目标支持吸收深度法(band_depth),
+        # 用高光谱。这样"高光谱烃指数"等多光谱无对应波段的目标在有高光谱数据时也能被推荐、可勾选。
+        if effective is None and available:
+            for s in (ENMAP_KEY, PRISMA_KEY):
+                if s in available and t["per_sensor"].get(s, {}).get("band_depth_available"):
+                    effective = s
+                    break
 
         targets.append({
             "mineral":          t["mineral"],
@@ -1335,10 +1342,11 @@ def api_recommend_targets():
             "data_present":     bool(effective and effective in available) if available else None,
             "per_sensor": {
                 s: {
-                    "ratio_expr":      ps["ratio_expr"],
-                    "ratio_available": ps["ratio_available"],
-                    "pca_available":   ps["pca_available"],
-                    "pca_bands":       (ps["pca_spec"] or {}).get("input_bands", []),
+                    "ratio_expr":           ps["ratio_expr"],
+                    "ratio_available":      ps["ratio_available"],
+                    "pca_available":        ps["pca_available"],
+                    "pca_bands":            (ps["pca_spec"] or {}).get("input_bands", []),
+                    "band_depth_available": ps.get("band_depth_available", False),
                 }
                 for s, ps in t["per_sensor"].items()
             },

@@ -1824,7 +1824,9 @@ function renderTargetsList() {
         const sensorTxt = t.effective_sensor
             ? (t.effective_sensor === t.preferred_sensor
                 ? `<span class="text-emerald-600">${t.effective_sensor}</span>`
-                : `<span class="text-amber-600">${t.effective_sensor}</span> <span class="text-[9px] text-slate-400">(回退,首选${t.preferred_sensor}无数据)</span>`)
+                : (t.preferred_sensor
+                    ? `<span class="text-amber-600">${t.effective_sensor}</span> <span class="text-[9px] text-slate-400">(回退,首选${t.preferred_sensor}无数据)</span>`
+                    : `<span class="text-emerald-600">${t.effective_sensor}</span> <span class="text-[9px] text-slate-400">(高光谱吸收深度法)</span>`))
             : `<span class="text-red-500">${t.preferred_sensor || '?'} 数据缺失</span>`;
         const cls = ok
             ? 'flex items-start gap-2 p-2 border thin-border rounded hover:bg-slate-50 cursor-pointer'
