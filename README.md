@@ -262,12 +262,20 @@ File I/O (.npy)
 
 ## 依赖
 
+完整依赖见 [`requirements.txt`](requirements.txt):
+
 | 包 | 版本 | 用途 |
 |----|------|------|
-| Flask | 2.3+ | Web 框架 |
-| NumPy | 1.24+ | 数组计算 |
-| SciPy | 1.11+ | 插值和重采样 |
-| Matplotlib | 3.7+ | 图像预览生成 |
+| Flask | ==2.3.3 | Web 框架 |
+| Werkzeug | ==2.3.7 | Flask 底层 WSGI 工具库 |
+| NumPy | ==1.24.3 | 数组计算 |
+| SciPy | ==1.11.1 | 插值和重采样 |
+| Matplotlib | ==3.7.1 | 图像预览生成 |
+| rasterio | ==1.3.8 | 读写 GeoTIFF/ENVI(自带 GDAL) |
+| Pillow | >=10.0.0 | 图像处理 / PNG 编码 |
+| requests | >=2.31.0 | HTTP 请求(底图瓦片、外部接口) |
+| openai | >=1.50.0 | LLM 客户端(矿床类型推理,兼容 DeepSeek) |
+| anthropic | >=0.40.0 | LLM 客户端(Claude) |
 
 ## 输出日志示例
 
