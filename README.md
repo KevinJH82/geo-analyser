@@ -1,6 +1,23 @@
-# 🛰 遥感数据预处理工作台
+# 🛰 地质蚀变遥感分析平台
 
-## 概述
+一个面向矿产勘探的 **Flask Web 平台**,从交付影像数据到蚀变异常成图、形变监测一站式完成。下文"预处理工作台"是其中一个模块;完整能力如下。
+
+## 系统功能简介
+
+| 模块 | 能力 | 主要接口 |
+|------|------|----------|
+| 🗂 **交付项目管理** | 加载交付数据、按传感器检测覆盖、上传 ROI(ovkml/geojson)、影像预览 | `/api/projects` `/api/upload_roi` `/api/project_preview` |
+| 🔬 **蚀变分析** | 多光谱**波段比值法**与 **Crosta PCA**、高光谱**吸收深度法(band_depth)**;阈值法支持 `mean_std`/`median_mad`(稳健,抗拼接缝)/`percentile`;支持单矿物与批量分析 | `/api/analyze` `/api/analyze_batch` `/api/analyze_preview` |
+| 🛰 **多/高光谱传感器** | ASTER、Sentinel-2、Landsat-8(多光谱);EnMAP、PRISMA(高光谱) | — |
+| 🧭 **矿床类型推理** | 按矿种推荐蚀变矿物组合,可选 LLM 辅助识别矿床类型 | `/api/deposit_types` `/api/infer_deposit_type` `/api/recommend_targets` |
+| 📈 **InSAR 形变** | 干涉形变分析与时间序列 | `/api/insar/analyze` `/api/insar/timeseries` `/api/insar/stacks` |
+| 🧩 **聚类分析** | 对异常/指数图做聚类分区 | `/api/clustering` |
+| 💾 **结果落盘与下载** | 自动保存 GeoTIFF/PNG/manifest,历史结果浏览与栅格打包下载 | `/api/saved_runs` `/api/download_run_rasters/<run_id>` |
+| 🧪 **数据预处理工作台** | 大气校正 → 几何校正 → 干扰剔除(详见下文) | `/api/scan` `/api/process` |
+
+---
+
+## 概述(数据预处理工作台模块)
 
 这是一个集成了三个预处理模块的 Web 界面，用于遥感影像的批量处理：
 
