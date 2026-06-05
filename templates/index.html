@@ -702,6 +702,13 @@
                                 <option value="plasma">plasma</option>
                             </select>
                         </div>
+                        <div class="col-span-2">
+                            <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+                                <input type="checkbox" id="use_structural_prior">
+                                <span class="font-bold text-slate-600">启用构造约束(地质构造解译)</span>
+                            </label>
+                            <p class="text-[9px] text-slate-400 mt-0.5 leading-snug">叠加 geo-stru 断裂/线密度对综合评分做"近断裂优先"软加权,并在综合图与报告中叠加断裂线、交汇点与走向统计。需该研究区已有构造解译产物,否则自动跳过。</p>
+                        </div>
                     </div>
                 </section>
 
@@ -1878,6 +1885,7 @@ document.getElementById('analyzeBatchBtn').addEventListener('click', async () =>
         threshold_method: document.getElementById('threshold_method').value,
         k:                parseFloat(document.getElementById('k_value').value) || 2.0,
         colormap:         document.getElementById('alteration_colormap').value || 'hot',
+        use_structural_prior: document.getElementById('use_structural_prior').checked || false,
     };
     pushAlterLog(`执行批量分析: ${body.deposit_type} · ${body.selected_minerals.length} 矿物 × ${methods.length} 方法`, 'text-blue-600');
 
@@ -1895,6 +1903,11 @@ document.getElementById('analyzeBatchBtn').addEventListener('click', async () =>
         document.querySelector('.alter-tab[data-tab="grid"]').click();
         updateReportButtons();
         pushAlterLog(`完成 · 高置信像素 ${data.high_confidence_total_pixels}`, 'text-emerald-600');
+        if (body.use_structural_prior) {
+            const s = data.structural;
+            if (s && s.warning) pushAlterLog(`构造约束: ${s.warning}`, 'text-amber-600');
+            else if (s && s.aoi_name != null) pushAlterLog(`构造约束已叠加: AOI=${s.aoi_name} · 断裂 ${s.n_lineaments} 条 · 交汇点 ${s.n_intersections} 处`, 'text-emerald-600');
+        }
         if (data.saved && data.saved.run_id) {
             const aux = data.saved.n_aux ? ` / ${data.saved.n_aux} 元数据` : '';
             pushAlterLog(`结果已保存: results/${data.saved.run_id} (${data.saved.n_rasters} 栅格 / ${data.saved.n_previews} 预览${aux})`, 'text-emerald-600');
@@ -2236,7 +2249,12 @@ function buildInterpretation(req, data, selectedDt) {
         if (detected.length === 0)
             recs.push(`<b>放宽阈值或换方法</b>:当前 k=${escHtml(String(k))} 下几乎无异常检出,建议降低 k 或改用 95% 百分位法重跑,避免漏检弱异常。`);
     }
-    recs.push(`<b>多源证据综合</b>:将本次蚀变异常与区域地质图、构造线、物探(航磁/激电)及已知矿(化)点叠合,圈定兼具"蚀变 + 构造 + 物探"多重证据的综合找矿靶区,再行验证。`);
+    const _st = data && data.structural;
+    if (_st && _st.aoi_name != null) {
+        recs.push(`<b>多源证据综合(已叠加构造)</b>:本次综合评分已叠加 geo-stru 构造解译(断裂 ${_st.n_lineaments} 条、交汇点 ${_st.n_intersections} 处、优势走向 ${(_st.dominant_strikes_deg||[]).map(d=>d+'°').join('/') || '—'}),建议优先核查<b>位于断裂交汇点附近、构造关联度高</b>的蚀变浓集区;并进一步与物探(航磁/激电)及已知矿(化)点叠合,圈定多重证据靶区。`);
+    } else {
+        recs.push(`<b>多源证据综合</b>:将本次蚀变异常与区域地质图、构造线、物探(航磁/激电)及已知矿(化)点叠合,圈定兼具"蚀变 + 构造 + 物探"多重证据的综合找矿靶区,再行验证。${(_st && _st.warning) ? `<br><span style="color:#94a3b8;">(本次已尝试启用构造约束,但${escHtml(_st.warning)})</span>` : ''}`);
+    }
 
     return `
 <h2>⑥ 结果解读与成矿指示</h2>
@@ -2467,6 +2485,8 @@ ${gridHTML || '<p style="color:#94a3b8;">无网格结果。</p>'}
 <p style="font-size:12px;color:#64748b;">综合判断给出每个传感器下的两类汇总图,用于在所有矿物的结果间做"互证"和"叠加":</p>
 ${compHTML || '<p style="color:#94a3b8;">无综合结果。</p>'}
 
+${buildStructuralSection(data)}
+
 ${buildInterpretation(req, data, selectedDt)}
 
 <h2>⑧ 方法学说明</h2>
@@ -2494,6 +2514,44 @@ ${buildInterpretation(req, data, selectedDt)}
 <p style="margin-top:32px;font-size:11px;color:#94a3b8;text-align:center;">DeepExplor · GeoAnalyser 蚀变模块 · 报告由前端自动生成于 ${escHtml(ts)}</p>
 
 </body></html>`;
+}
+
+function buildStructuralSection(data) {
+    const s = data && data.structural;
+    if (!s) return '';   // 未启用构造约束
+    if (s.warning) {
+        return `<h2>⑤b 构造约束(地质构造解译)</h2>
+<p style="font-size:12px;color:#d97706;">${escHtml(s.warning)}。本次综合评分未叠加构造权重。</p>`;
+    }
+    const strikes = (s.dominant_strikes_deg || []).map(d => `${d}°`).join(' / ') || '—';
+    const assoc = s.association_by_mineral || {};
+    const rows = Object.keys(assoc).map(m => {
+        const a = assoc[m] || {};
+        const md = (a.median_dist_m == null) ? '—' : `${Math.round(a.median_dist_m)} m`;
+        const fr = (a.frac_within_buffer == null) ? '—' : `${(a.frac_within_buffer * 100).toFixed(0)}%`;
+        return `<tr><td>${escHtml(m)}</td><td>${a.n_anomaly ?? '—'}</td><td>${md}</td><td>${fr}</td></tr>`;
+    }).join('');
+    const bufM = (() => { for (const k in assoc) { if (assoc[k] && assoc[k].buffer_m) return Math.round(assoc[k].buffer_m); } return 300; })();
+    const rose = s.rose_diagram
+        ? `<div style="margin-top:8px;"><img src="${s.rose_diagram}" style="max-width:320px;border:1px solid #e2e8f0;border-radius:6px;" alt="走向玫瑰图"><p style="font-size:11px;color:#94a3b8;">断裂走向玫瑰图(来自 geo-stru)</p></div>`
+        : '';
+    return `<h2>⑤b 构造约束(地质构造解译)</h2>
+<p style="font-size:12px;color:#64748b;">已叠加 geo-stru 构造解译产物对综合评分做"近断裂优先"软加权(成矿受构造控制),并在第⑤节综合图上叠加断裂线(蓝)与断裂交汇点(橙,成矿最有利部位)。</p>
+<dl class="params">
+  <dt>匹配研究区</dt><dd>${escHtml(s.aoi_name || '—')}</dd>
+  <dt>断裂(线性体)条数</dt><dd>${s.n_lineaments ?? '—'}</dd>
+  <dt>断裂交汇点</dt><dd>${s.n_intersections ?? 0} 处</dd>
+  <dt>优势走向</dt><dd>${escHtml(strikes)}</dd>
+  <dt>断裂总长</dt><dd>${s.total_lineament_length_km != null ? s.total_lineament_length_km.toFixed(2) + ' km' : '—'}</dd>
+</dl>
+${rose}
+<h3>各蚀变异常的构造关联度</h3>
+<p style="font-size:12px;color:#64748b;">"中位距断裂"= 该矿物异常像元到最近断裂的中位距离;"缓冲区内占比"= 异常像元落在断裂 ${bufM} m 缓冲区内的比例。关联度高(距离近、占比高)的异常更可能受构造控制、可信度更高。</p>
+<table>
+  <thead><tr><th>蚀变矿物</th><th style="width:90px;">异常像元数</th><th style="width:110px;">中位距断裂</th><th style="width:120px;">缓冲区内占比</th></tr></thead>
+  <tbody>${rows || '<tr><td colspan="4" style="color:#94a3b8;">无可计算的关联度(无异常或无距断裂栅格)。</td></tr>'}</tbody>
+</table>
+<p style="font-size:11px;color:#94a3b8;margin-top:6px;">注:断裂为 geo-stru 基于 DEM 提取的<b>地形线性体</b>,是断裂的代理,有定位不确定性;故只做软加权辅助判读,不作硬性取舍。</p>`;
 }
 
 function reportFilename() {

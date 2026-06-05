@@ -1443,11 +1443,86 @@ def api_infer_deposit_type():
         })
 
 
+def _apply_structural_prior(score, shape, transform, crs, roi_geojson, weight=0.15):
+    """
+    用 geo-stru 构造产物(距断裂邻近度)对蚀变综合得分加权:成矿受构造控制,
+    近断裂处上调、远断裂轻度下调,把分散异常约束为沿构造展布的靶区。
+
+    复用 geo-analyser/structural_weighting + commons/structural_broker(bbox 相交发现)。
+    任何缺失/失败都原样返回 score——可选增强,绝不破坏既有分析。
+    """
+    try:
+        import sys
+        if '/opt/deepexplor-services' not in sys.path:
+            sys.path.insert(0, '/opt/deepexplor-services')
+        import structural_weighting as _sw
+        if not roi_geojson or transform is None or crs is None:
+            return score
+        bbox = bbox_from_geojson(roi_geojson)
+        if not bbox:
+            return score
+        layers = _sw.load_structural_layers(bbox, shape, transform, crs)
+        if not layers or layers.get('distance') is None:
+            return score
+        prox = _sw.proximity_from_distance(layers['distance'])
+        out = _sw.apply_structural_weighting(score, prox, weight=weight)
+        app.logger.info(f"已叠加 geo-stru 构造控矿先验 (AOI={layers.get('aoi_name')}, weight={weight})")
+        return out
+    except Exception as e:
+        app.logger.warning(f"构造控矿先验叠加失败,忽略: {e}")
+        return score
+
+
+def _or_masks(method_masks: Dict[str, np.ndarray]):
+    """把一个矿物在多方法下的异常掩膜取并集(任一方法判异常即为异常)。"""
+    arrs = [v for v in (method_masks or {}).values() if v is not None]
+    if not arrs:
+        return None
+    u = arrs[0].astype(bool).copy()
+    for x in arrs[1:]:
+        u |= x.astype(bool)
+    return u
+
+
+def _structural_assoc_for_sensor(bbox, shape, transform, crs, masks_by_mineral, buffer_m=300.0):
+    """对某传感器格网载入'距断裂距离'层,逐矿物算异常-构造关联度。返回 {mineral: assoc}。"""
+    out: Dict[str, Any] = {}
+    if not bbox or transform is None or crs is None or not masks_by_mineral:
+        return out
+    try:
+        import structural_weighting as _sw
+        layers = _sw.load_structural_layers(bbox, shape, transform, crs)
+        dist = (layers or {}).get("distance")
+        if dist is None:
+            return out
+        for mineral, mask in masks_by_mineral.items():
+            a = _sw.lineament_association(mask, dist, buffer_m=buffer_m)
+            if a is not None:
+                out[mineral] = a
+    except Exception as e:
+        app.logger.warning(f"构造关联度计算失败,忽略: {e}")
+    return out
+
+
+def _png_to_datauri(path) -> Optional[str]:
+    """把本地 PNG 文件读成 data URI(供前端报告内嵌走向玫瑰图)。失败返回 None。"""
+    try:
+        if not path:
+            return None
+        with open(path, "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode("utf-8")
+    except Exception:
+        return None
+
+
 def _run_hyperspectral_analysis(
     sensor_key, cube, wavelengths_um, profile, aux_paths,
     targets_used, roi_geojson, basemap_view,
     threshold_method, k, colormap,
     per_mineral_results, composites_per_sensor, save_sensors,
+    use_structural_prior=False,
+    struct_lineaments=None, struct_intersections=None,
+    roi_bbox=None, struct_assoc_out=None,
 ):
     """
     对一个高光谱传感器(EnMAP / PRISMA)跑吸收深度(band_depth)分析,
@@ -1557,9 +1632,17 @@ def _run_hyperspectral_analysis(
         if roi_mask is not None:
             inter &= roi_mask
 
+        if use_structural_prior:
+            score = _apply_structural_prior(score, (Hh, Ww), transform, crs, roi_geojson)
+            if struct_assoc_out is not None:
+                for mineral, a in _structural_assoc_for_sensor(
+                        roi_bbox, (Hh, Ww), transform, crs, masks).items():
+                    struct_assoc_out.setdefault(mineral, a)
+
         if basemap_view is not None:
             comp = _render_composite_on_basemap(
                 basemap_view, inter, score, transform, crs, roi_geojson, colormap,
+                lineaments=struct_lineaments, intersections=struct_intersections,
             )
         else:
             comp = {"intersection": None, "score": None}
@@ -1612,6 +1695,9 @@ def api_analyze_batch():
     threshold_method = data.get("threshold_method", "mean_std")
     k = float(data.get("k", 2.0))
     colormap = data.get("colormap", "hot")
+    # 可选:用 geo-stru 构造解译产物(距断裂邻近度)对蚀变综合得分做构造控矿加权。
+    # 默认关闭,开启后不改变各矿物单独结果,仅重排综合得分(近断裂优先)。
+    use_structural_prior = bool(data.get("use_structural_prior", False))
 
     if not project_name or not deposit_type:
         return jsonify({"error": "缺少 project_name 或 deposit_type"}), 400
@@ -1630,6 +1716,19 @@ def api_analyze_batch():
     coverage_info: Dict[str, Dict[str, Any]] = {}
     usable_sensors: set = set()
     roi_bbox = bbox_from_geojson(roi_geojson) if roi_geojson else None
+
+    # 可选:加载 geo-stru 构造解译上下文(断裂线/交汇点/走向统计),供出图叠合与报告。
+    # 与 _apply_structural_prior 的评分加权配套;任何缺失都静默降级为 None,不影响分析。
+    struct_ctx = None
+    if use_structural_prior and roi_bbox:
+        try:
+            import structural_weighting as _sw
+            struct_ctx = _sw.load_structural_context(roi_bbox)
+        except Exception as e:
+            app.logger.warning(f"加载构造上下文失败,忽略: {e}")
+    struct_lineaments = (struct_ctx or {}).get("lineaments")
+    struct_intersections = (struct_ctx or {}).get("intersections")
+    struct_assoc_by_mineral: Dict[str, Any] = {}
     for sk in available_sensors:
         if roi_bbox is None:
             # 无 ROI 时默认所有可用传感器都参与
@@ -1848,11 +1947,22 @@ def api_analyze_batch():
                 avg = np.mean([m.astype(np.float32) for m in masks.values()], axis=0)
                 score_map += weight * avg
 
+        if use_structural_prior:
+            score_map = _apply_structural_prior(
+                score_map, (H, W), profile.get("transform"), profile.get("crs"), roi_geojson)
+            # 异常-构造关联度(逐矿物,基于各方法异常并集)
+            mbym = {mineral: _or_masks(mm) for mineral, mm in sensor_masks.items()}
+            mbym = {k2: v for k2, v in mbym.items() if v is not None}
+            for mineral, a in _structural_assoc_for_sensor(
+                    roi_bbox, (H, W), profile.get("transform"), profile.get("crs"), mbym).items():
+                struct_assoc_by_mineral.setdefault(mineral, a)
+
         if basemap_view is not None:
             comp = _render_composite_on_basemap(
                 basemap_view, overall_inter, score_map,
                 profile.get("transform"), profile.get("crs"),
                 roi_geojson, colormap,
+                lineaments=struct_lineaments, intersections=struct_intersections,
             )
         else:
             class _FakeBatch: pass
@@ -1902,6 +2012,9 @@ def api_analyze_batch():
             targets_used, roi_geojson, basemap_view,
             threshold_method, k, colormap,
             per_mineral_results, composites_per_sensor, save_sensors,
+            use_structural_prior=use_structural_prior,
+            struct_lineaments=struct_lineaments, struct_intersections=struct_intersections,
+            roi_bbox=roi_bbox, struct_assoc_out=struct_assoc_by_mineral,
         )
         total_roi_pixels = max(total_roi_pixels, hs_roi_size)
         overall_high_pixels += high_pixels
@@ -1924,6 +2037,29 @@ def api_analyze_batch():
                 "results":          {},
             })
 
+    # 构造约束汇总(供前端出图说明/报告)+ 逐矿物关联度回填到 grid
+    structural_summary = None
+    if struct_ctx:
+        for mineral, a in struct_assoc_by_mineral.items():
+            if mineral in per_mineral_results:
+                per_mineral_results[mineral]["structural_assoc"] = a
+        structural_summary = {
+            "enabled":                   True,
+            "aoi_name":                  struct_ctx.get("aoi_name"),
+            "n_lineaments":              struct_ctx.get("n_lineaments"),
+            "dominant_strikes_deg":      struct_ctx.get("dominant_strikes_deg"),
+            "n_intersections":           len(struct_ctx.get("intersections") or []),
+            "total_lineament_length_km": struct_ctx.get("total_lineament_length_km"),
+            "lineament_density_mean":    struct_ctx.get("lineament_density_mean"),
+            "rose_diagram":              _png_to_datauri(struct_ctx.get("rose_diagram_path")),
+            "association_by_mineral":    struct_assoc_by_mineral,
+        }
+    elif use_structural_prior:
+        structural_summary = {
+            "enabled": True,
+            "warning": "未找到与本项目 ROI 相交的构造解译数据,构造约束未生效",
+        }
+
     # 自动落盘(失败只告警,不影响分析返回)
     saved_info = None
     try:
@@ -1936,6 +2072,7 @@ def api_analyze_batch():
                 "colormap":          colormap,
                 "methods":           methods,
                 "selected_minerals": selected_minerals,
+                "use_structural_prior": use_structural_prior,
             },
             roi_geojson=roi_geojson,
             available_sensors=sorted(available_sensors),
@@ -1944,6 +2081,7 @@ def api_analyze_batch():
             total_roi_pixels=total_roi_pixels,
             high_confidence_total_pixels=overall_high_pixels,
             sensors=save_sensors,
+            structural=structural_summary,
         )
         app.logger.info(f"分析结果已保存: {saved_info['run_id']} "
                         f"({saved_info['n_rasters']} 栅格 / {saved_info['n_previews']} 预览)")
@@ -1960,6 +2098,7 @@ def api_analyze_batch():
         "grid":              list(per_mineral_results.values()),
         "composites":        composites_per_sensor,
         "high_confidence_total_pixels": overall_high_pixels,
+        "structural":        structural_summary,
         "saved":             saved_info,
     })
 
@@ -2579,6 +2718,26 @@ def _draw_roi_outline(ax, roi_geojson: Dict[str, Any], basemap_view: Dict[str, A
         app.logger.warning(f"_draw_roi_outline 失败: {e}")
 
 
+def _draw_lineaments(ax, lineaments, intersections, basemap_view,
+                     line_color: str = "#38bdf8", pt_color: str = "#f59e0b"):
+    """在 axes 上叠加地质构造断裂线(实线)与断裂交汇点(圆点)。坐标 EPSG:4326。"""
+    try:
+        from rasterio.transform import rowcol
+        tr = basemap_view["transform"]
+        for ln in (lineaments or []):
+            xs, ys = [], []
+            for lon, lat in ln:
+                r, c = rowcol(tr, lon, lat); xs.append(c); ys.append(r)
+            if xs:
+                ax.plot(xs, ys, color=line_color, linewidth=1.5, alpha=0.95)
+        for lon, lat in (intersections or []):
+            r, c = rowcol(tr, lon, lat)
+            ax.plot([c], [r], marker="o", color=pt_color, markersize=6,
+                    markeredgecolor="white", markeredgewidth=0.8, alpha=0.95)
+    except Exception as e:
+        app.logger.warning(f"_draw_lineaments 失败: {e}")
+
+
 def _render_cell_on_basemap(
     basemap_view: Dict[str, Any],
     anomaly_mask_src: np.ndarray,    # 保留参数兼容,但不再用于显示
@@ -2676,9 +2835,13 @@ def _render_composite_on_basemap(
     src_crs,
     roi_geojson: Dict[str, Any],
     colormap: str,
+    lineaments=None,
+    intersections=None,
 ) -> Dict[str, Optional[str]]:
-    """综合判断: 卫星底图 + ROI 内的交集/评分叠加。"""
+    """综合判断: 卫星底图 + ROI 内的交集/评分叠加。
+    传入 lineaments/intersections 时,叠加地质构造断裂线与交汇点(构造约束综合评分图)。"""
     out = {"intersection": None, "score": None}
+    _has_struct = bool(lineaments)
     try:
         inter_dst = _reproject_mask_to_basemap(intersection_src, src_transform, src_crs, basemap_view)
         inter_show = inter_dst & basemap_view["roi_mask"]
@@ -2702,6 +2865,8 @@ def _render_composite_on_basemap(
             ax.imshow(np.ma.masked_invalid(display), cmap=hot_cmap,
                       alpha=0.80, vmin=0, vmax=1, interpolation="bilinear")
         _draw_roi_outline(ax, roi_geojson, basemap_view)
+        if _has_struct:
+            _draw_lineaments(ax, lineaments, intersections, basemap_view)
         n_pix = int(inter_show.sum())
         ax.set_title(f"两方法交集 (高置信度 {n_pix} 像素)", fontsize=12)
         ax.axis("off")
@@ -2738,7 +2903,10 @@ def _render_composite_on_basemap(
             sm.set_array([])
             plt.colorbar(sm, ax=ax, fraction=0.046, pad=0.04, label="叠加评分")
         _draw_roi_outline(ax, roi_geojson, basemap_view)
-        ax.set_title(f"多蚀变叠加评分 (max={smax:.2f})", fontsize=12)
+        if _has_struct:
+            _draw_lineaments(ax, lineaments, intersections, basemap_view)
+        _title = "构造约束综合评分" if _has_struct else "多蚀变叠加评分"
+        ax.set_title(f"{_title} (max={smax:.2f})", fontsize=12)
         ax.axis("off")
         plt.tight_layout()
         buf = io.BytesIO(); plt.savefig(buf, format="png", bbox_inches="tight", dpi=150)
@@ -3180,6 +3348,34 @@ def api_insar_analyze():
                 weight_v=float(data.get("weight_v", 0.5)),
                 weight_m=float(data.get("weight_m", 0.5)),
                 coherence_threshold=float(data.get("coherence_threshold", 0.3)),
+            )
+        elif mode == "structural_attribution":
+            # 形变构造归因:先聚类活跃形变,再用 geo-stru 距断裂/坡度给每个簇定性
+            clusters = ia.los_velocity_clustering(
+                velocity, coherence,
+                velocity_threshold_mm_year=float(data.get("velocity_threshold_mm_year", 5.0)),
+                coherence_threshold=float(data.get("coherence_threshold", 0.3)),
+            )
+            dist = slp = None
+            try:
+                import glob as _g, rasterio as _rio, sys as _sys
+                if '/opt/deepexplor-services' not in _sys.path:
+                    _sys.path.insert(0, '/opt/deepexplor-services')
+                import structural_weighting as _sw
+                tifs = sorted(_g.glob(os.path.join(path, 'sentinel1_insar', '*', 'los_displacement.tif')))
+                bbox = stack["metas"][0].get("aoi_bbox") if stack.get("metas") else None
+                if tifs and bbox:
+                    with _rio.open(tifs[0]) as s:
+                        ref_tr, ref_crs = s.transform, s.crs
+                    layers = _sw.load_structural_layers(tuple(bbox), velocity.shape, ref_tr, ref_crs)
+                    if layers:
+                        dist, slp = layers.get('distance'), layers.get('slope')
+            except Exception as _e:
+                app.logger.warning(f"加载 geo-stru 构造层失败,归因退化为按速率符号: {_e}")
+            result = ia.attribute_deformation(
+                clusters.mask, velocity, lineament_distance=dist, slope=slp,
+                fault_dist_m=float(data.get("fault_dist_m", 300.0)),
+                steep_slope_deg=float(data.get("steep_slope_deg", 15.0)),
             )
         else:
             return jsonify({"error": f"未知 mode: {mode}"}), 400

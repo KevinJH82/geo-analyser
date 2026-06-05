@@ -54,7 +54,7 @@ RESULTS_ROOT = Path(os.environ.get(
 # 同一 (项目+矿床类型) 自动保存会累积,保留最近 N 个 run,删更旧的
 MAX_RUNS_PER_DEPOSIT = int(os.environ.get("MAX_RUNS_PER_DEPOSIT", "30"))
 
-SCHEMA_VERSION = "1.0"
+SCHEMA_VERSION = "1.1"   # 1.1: 增加构造约束(structural)块
 
 _SAFE_RE = re.compile(r"[^\w一-龥-]+")
 
@@ -139,6 +139,7 @@ def save_batch_run(
     total_roi_pixels: int,
     high_confidence_total_pixels: int,
     sensors: Dict[str, Dict[str, Any]],
+    structural: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     把一次批量分析落盘并返回 {run_id, run_dir, n_rasters, n_previews}。
@@ -284,6 +285,12 @@ def save_batch_run(
                 logger.warning("保存综合栅格失败 %s: %s", sensor_key, e)
             manifest_composites[sensor_key] = cmeta
 
+    # 构造约束块:剔除体积大的内嵌玫瑰图 base64,只留指针标记,保持 manifest 轻量
+    manifest_structural = None
+    if structural:
+        manifest_structural = {k: v for k, v in structural.items() if k != "rose_diagram"}
+        manifest_structural["rose_diagram_present"] = bool(structural.get("rose_diagram"))
+
     manifest = {
         "schema_version":               SCHEMA_VERSION,
         "run_id":                       run_id,
@@ -300,6 +307,7 @@ def save_batch_run(
         "sensors":                      manifest_sensors,
         "results":                      manifest_results,
         "composites":                   manifest_composites,
+        "structural":                   manifest_structural,
     }
     (run_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
