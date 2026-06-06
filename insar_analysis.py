@@ -146,6 +146,83 @@ def los_velocity_clustering(velocity: np.ndarray,
     )
 
 
+def attribute_deformation(active_mask: np.ndarray,
+                          velocity: np.ndarray,
+                          lineament_distance: Optional[np.ndarray] = None,
+                          slope: Optional[np.ndarray] = None,
+                          fault_dist_m: float = 300.0,
+                          steep_slope_deg: float = 15.0) -> InsarAnalysisResult:
+    """
+    形变构造归因:用 geo-stru 构造产物给 InSAR 形变簇一个"为什么"。
+
+    InSAR 只测到 LOS 形变,说不清成因。叠加 geo-stru 的"距断裂距离"与"坡度"后,
+    把每个活跃形变簇分类为:
+      - 活动断层(structural):簇靠近线性体(距断裂 < fault_dist_m)且非陡坡;
+      - 滑坡(slope-driven):簇位于陡坡(slope ≥ steep_slope_deg);
+      - 沉降/抬升(其它):远离断裂、非陡坡,按速率符号区分(开采/地下水等)。
+
+    输入数组须已对齐到 InSAR 格网(由 structural_weighting.load_structural_layers 重投影得到)。
+    缺 lineament_distance/slope 时退化为按速率符号的沉降/抬升分类。
+
+    Returns
+    -------
+    InsarAnalysisResult,.array 为归因类别码图(0=无,1=活动断层,2=滑坡,3=沉降,4=抬升/其它),
+    .stats['clusters'] 为逐簇记录。
+    """
+    from scipy.ndimage import label
+
+    mask = np.asarray(active_mask).astype(bool)
+    v = np.asarray(velocity, dtype=np.float32)
+    labeled, n = label(mask)
+    code = np.zeros(mask.shape, dtype=np.float32)  # 类别码图
+    CODE = {"active_fault": 1, "landslide": 2, "subsidence": 3, "uplift_other": 4}
+    clusters = []
+    counts = {kk: 0 for kk in CODE}
+
+    for i in range(1, n + 1):
+        sel = labeled == i
+        size = int(sel.sum())
+        if size == 0:
+            continue
+        mean_v = float(np.nanmean(v[sel]))
+        mean_dist = float(np.nanmean(lineament_distance[sel])) if lineament_distance is not None else None
+        mean_slope = float(np.nanmean(slope[sel])) if slope is not None else None
+
+        if mean_slope is not None and mean_slope >= steep_slope_deg:
+            kind = "landslide"
+        elif mean_dist is not None and mean_dist <= fault_dist_m:
+            kind = "active_fault"
+        else:
+            kind = "subsidence" if mean_v < 0 else "uplift_other"
+
+        code[sel] = CODE[kind]
+        counts[kind] += 1
+        clusters.append({
+            "cluster_id": i, "pixels": size, "kind": kind,
+            "mean_velocity_mm_year": round(mean_v, 2),
+            "mean_dist_to_fault_m": None if mean_dist is None else round(mean_dist, 1),
+            "mean_slope_deg": None if mean_slope is None else round(mean_slope, 1),
+        })
+
+    stats = {
+        "n_clusters": len(clusters),
+        "counts": counts,
+        "has_structural_context": lineament_distance is not None or slope is not None,
+        "fault_dist_m": fault_dist_m,
+        "steep_slope_deg": steep_slope_deg,
+        "clusters": clusters,
+    }
+    return InsarAnalysisResult(
+        name="deformation_structural_attribution",
+        array=code,
+        mask=(code > 0),
+        stats=stats,
+        colormap="tab10",
+        vmin=0.0, vmax=4.0,
+        unit="归因类别(1断层/2滑坡/3沉降/4抬升)",
+    )
+
+
 def fusion_deformation_mineral(velocity: np.ndarray,
                                mineral_anomaly: np.ndarray,
                                coherence: Optional[np.ndarray] = None,
