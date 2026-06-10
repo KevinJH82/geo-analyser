@@ -3271,7 +3271,10 @@ def handle_500(error):
 def api_insar_stacks():
     """列出 geo-insar 标准输出目录下所有可分析的 AOI 堆栈。"""
     try:
-        from insar_broker import scan_available_aois
+        import sys as _sys
+        if '/opt/deepexplor-services' not in _sys.path:
+            _sys.path.insert(0, '/opt/deepexplor-services')
+        from commons.insar_broker import scan_available_aois
         stacks = scan_available_aois()
         return jsonify({"stacks": stacks})
     except Exception as e:
@@ -3289,7 +3292,10 @@ def api_insar_analyze():
         "mineral_anomaly_path": "..."(可选,仅 fusion_mineral 用) }
     """
     try:
-        from insar_broker import get_stack_path
+        import sys as _sys
+        if '/opt/deepexplor-services' not in _sys.path:
+            _sys.path.insert(0, '/opt/deepexplor-services')
+        from commons.insar_broker import get_stack_path
         from insar_timeseries import load_insar_stack, temporal_velocity_trend
         import insar_analysis as ia
 
@@ -3407,7 +3413,10 @@ def api_insar_timeseries():
     Body: { "aoi_name": "...", "min_coherence": 0.3 }
     """
     try:
-        from insar_broker import get_stack_path
+        import sys as _sys
+        if '/opt/deepexplor-services' not in _sys.path:
+            _sys.path.insert(0, '/opt/deepexplor-services')
+        from commons.insar_broker import get_stack_path
         from insar_timeseries import load_insar_stack, temporal_velocity_trend, coherence_decay_model
 
         data = request.get_json() or {}
