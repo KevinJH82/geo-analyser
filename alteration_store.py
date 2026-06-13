@@ -3,7 +3,7 @@
 
 每次 /api/analyze_batch 成功后自动落盘到应用本地 results/ 目录,用于:
   1. 后续查看 / 历史对比;
-  2. 作为基础数据供其他子系统(clustering_analysis / insar_analysis 等)消费。
+  2. 作为基础数据供其他子系统(insar_analysis 等)消费。
 
 目录结构:
     results/
@@ -24,7 +24,7 @@
 交接格式说明(给其他子系统):
     rasters/ 下的 GeoTIFF 即基础数据。*__index.tif 是连续蚀变指数(float32),
     *__mask.tif 是阈值掩膜(uint8 0/1),均带 crs+transform,rasterio.open 直接读,
-    正是 clustering_analysis / insar_analysis 期望的 index_map / anomaly_mask 数组。
+    正是 insar_analysis 等子系统期望的 index_map / anomaly_mask 数组。
 """
 
 from __future__ import annotations
@@ -280,6 +280,18 @@ def save_batch_run(
                 rel_png = f"previews/{sensor_key}__composite__score.png"
                 if _write_png_b64(run_dir / rel_png, comp.get("score_png")):
                     cmeta["score_png"] = rel_png
+                    n_previews += 1
+                # 丛林模式:成矿有利度(多证据融合)栅格 + 预览
+                prosp = comp.get("prospectivity_arr")
+                if prosp is not None:
+                    rel = f"rasters/{sensor_key}__composite__prospectivity.tif"
+                    _write_raster(run_dir / rel, np.asarray(prosp, dtype=np.float32),
+                                  profile, "float32", None)
+                    cmeta["prospectivity_tif"] = rel
+                    n_rasters += 1
+                rel_png = f"previews/{sensor_key}__composite__prospectivity.png"
+                if _write_png_b64(run_dir / rel_png, comp.get("prospectivity_png")):
+                    cmeta["prospectivity_png"] = rel_png
                     n_previews += 1
             except Exception as e:
                 logger.warning("保存综合栅格失败 %s: %s", sensor_key, e)

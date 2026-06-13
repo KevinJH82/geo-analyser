@@ -4,12 +4,14 @@
 输入: ROI 的 GeoJSON 几何
 输出: top-k 候选矿床类型,每个含 confidence + evidence + source
 
-两段式判断:
-  1. USGS MRDS WFS API — 查 ROI 周边已知矿床点位
-  2. Claude API (claude-opus-4-7) — 基于地质背景文字推理(JSON 结构化输出)
+机制:
+  1. LLM 推理 (DeepSeek, OpenAI 兼容) — 主路径,基于地理坐标 + 成矿带知识
+     从本地库的 deposit_type 枚举中给出 top-k 候选(结构化工具调用输出)。
+  2. USGS MRDS WFS — 辅助佐证。该 WFS 图层只提供周边已知矿点的"矿种代码 + 名称"
+     (无矿床类型字段),故仅用作:① 喂给 LLM 提示词;② LLM 候选矿种命中周边矿种时
+     提升置信度。它本身给不出 deposit_type。
 
-合并策略: 数据库权重 0.6 + LLM 权重 0.4,按 deposit_type 名归并后排序。
-失败/无 key/无网络时优雅降级,前端再走手动两级下拉。
+失败/无 key/无网络时优雅降级,返回空候选 + reason,前端再走手动两级下拉。
 """
 
 from __future__ import annotations
@@ -17,10 +19,10 @@ from __future__ import annotations
 import json
 import logging
 import os
-from collections import defaultdict
+import xml.etree.ElementTree as ET
 from typing import Any, Dict, List, Optional, Tuple
 
-from alteration_db import all_deposit_type_names
+from alteration_db import all_deposit_type_names, get_deposit_type_meta
 
 logger = logging.getLogger(__name__)
 
@@ -37,9 +39,20 @@ DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.co
 LLM_TIMEOUT = 30
 LLM_MAX_TOKENS = 1500
 
-# 数据库 / LLM 合并权重
-W_DB = 0.6
-W_LLM = 0.4
+# USGS 周边矿种命中时给 LLM 候选的置信度加成(封顶 1.0)
+USGS_CORROBORATION_BONUS = 0.1
+
+# USGS MRDS code_list 矿种代码(元素符号)→ 本地库中文矿种名
+# 用于把"周边已知矿点"对齐到 deposit_type 的归属矿种,做佐证加权。
+_CODE_TO_COMMODITY = {
+    "AU": "金", "AG": "银", "CU": "铜", "PB": "铅锌", "ZN": "铅锌",
+    "MO": "钼", "W": "钨", "SN": "锡", "FE": "铁", "MN": "锰",
+    "TI": "钛", "CR": "铬", "V": "钒", "CO": "钴", "NI": "镍",
+    "HG": "汞", "SB": "锑", "U": "铀", "LI": "锂", "TA": "钽",
+    "REE": "稀土", "CE": "稀土", "LA": "稀土", "Y": "稀土", "ND": "稀土",
+    "P": "磷矿", "C": "石墨", "F": "萤石", "BA": "重晶石", "AL": "铝土矿",
+    "PT": "铂族元素", "PD": "铂族元素", "K": "钾盐",
+}
 
 
 # ─────────────────────────────────────────────
@@ -77,76 +90,24 @@ def _roi_bbox(roi_geojson: Dict[str, Any]) -> Optional[Tuple[float, float, float
 
 
 # ─────────────────────────────────────────────
-# 第一段: USGS MRDS 查询
+# 辅助佐证: USGS MRDS 周边矿种
 # ─────────────────────────────────────────────
+# 注意: USGS MRDS WFS 的 mrds 图层只暴露 site_name / code_list 等字段,
+# 没有 dep_type(矿床类型)字段,故只能给出"周边已知矿点的矿种 + 名称",
+# 给不出矿床类型。本段仅作 LLM 推理的佐证,不产 deposit_type。
 
-# USGS MRDS dep_type / commodity 到本地 JSON 中 deposit_type 名称的关键词映射
-# 用模糊匹配 (子串 / 关键词组),不要求严格相等。
-_USGS_KEYWORDS = [
-    # (USGS 字段中的关键词列表, 本地 JSON 中的 deposit_type_name)
-    (["porphyry", "porphyry cu", "斑岩"],                    "斑岩型铜矿"),
-    (["porphyry mo", "斑岩钼"],                              "斑岩型钼矿（Climax型）"),
-    (["porphyry cu-mo", "porphyry copper-molybdenum"],       "斑岩型铜钼矿"),
-    (["porphyry cu-au", "porphyry copper-gold"],             "斑岩型铜金矿"),
-    (["skarn cu", "skarn copper", "矽卡岩铜"],               "矽卡岩型铜矿"),
-    (["skarn fe", "skarn iron", "矽卡岩铁"],                 "矽卡岩型铁矿"),
-    (["skarn w", "skarn tungsten", "矽卡岩钨"],              "矽卡岩型钨矿"),
-    (["skarn pb-zn", "skarn lead-zinc"],                     "矽卡岩型铅锌矿"),
-    (["vms", "volcanogenic massive sulfide"],                "VMS型铜锌矿"),
-    (["iocg", "iron oxide copper-gold"],                     "IOCG型铁氧化物铜金矿"),
-    (["mvt", "mississippi valley"],                          "MVT型铅锌矿"),
-    (["sedex", "sedimentary exhalative"],                    "SEDEX型铅锌矿"),
-    (["epithermal", "low-sulfidation", "浅成低温"],          "浅成低温热液型金矿（低硫化型）"),
-    (["high-sulfidation", "high sulfidation"],               "浅成低温热液型金矿（高硫化型）"),
-    (["orogenic gold", "造山金"],                            "造山型金矿"),
-    (["carlin"],                                             "卡林型金矿"),
-    (["pge", "platinum-group", "layered intrusion"],         "层状镁铁质侵入体PGE矿"),
-    (["bif", "banded iron formation", "条带状铁"],           "BIF型铁矿（条带状铁建造）"),
-    (["greisen w-sn", "greisen tungsten-tin"],               "云英岩型钨锡矿"),
-    (["greisen sn", "greisen tin"],                          "云英岩型锡矿"),
-    (["magmatic ni-cu", "magmatic nickel-copper"],           "岩浆硫化物型镍铜矿"),
-    (["laterite ni", "lateritic nickel"],                    "红土型镍矿"),
-    (["sediment-hosted cu", "sediment hosted copper"],       "沉积岩容矿铜钴矿"),
-    (["laterite co", "lateritic cobalt"],                    "红土型钴矿"),
-    (["sedimentary mn", "sedimentary manganese"],            "沉积型锰矿"),
-    (["volcanogenic mn", "volcanic-sedimentary mn"],         "火山沉积型锰矿"),
-    (["podiform chromite", "ophiolite chromite"],            "豆荚状铬铁矿（蛇绿岩型）"),
-    (["carbonatite ree", "carbonatite rare earth"],          "碳酸岩型稀土矿"),
-    (["ion adsorption ree"],                                 "离子吸附型稀土矿"),
-    (["pegmatite li", "spodumene"],                          "伟晶岩型锂矿（锂辉石型）"),
-    (["brine li", "salar"],                                  "盐湖卤水型锂矿"),
-    (["clay li", "lithium clay"],                            "沉积型锂矿（粘土型）"),
-    (["unconformity uranium"],                               "不整合面型铀矿"),
-    (["sandstone uranium"],                                  "砂岩型铀矿"),
-    (["albitite uranium", "na-metasomatic"],                 "钠交代型铀矿"),
-    (["laterite bauxite"],                                   "红土型铝土矿"),
-    (["epithermal sb", "low-temperature antimony"],          "低温热液型锑矿"),
-    (["epithermal hg", "low-temperature mercury"],           "低温热液型汞矿"),
-    (["magmatic v-ti-fe", "vanadium-titanium-iron"],         "岩浆型钒钛磁铁矿"),
-    (["black shale v", "shale vanadium"],                    "沉积型钒矿（黑色页岩型）"),
-    (["graphite"],                                           "区域变质型石墨矿"),
-    (["kimberlite diamond"],                                 "金伯利岩型金刚石矿"),
-    (["evaporite potash"],                                   "蒸发岩型钾盐矿"),
-    (["phosphate"],                                          "沉积型磷块岩矿"),
-    (["fluorite vein"],                                      "热液脉型萤石矿"),
-    (["barite"],                                             "热液/沉积型重晶石矿"),
-]
+_MS_NS = "{http://mapserver.gis.umn.edu/mapserver}"
 
 
-def _match_usgs_record(commodity: str, dep_type: str) -> Optional[str]:
-    """把 USGS 的 commodity + dep_type 字段映射到本地 deposit_type 名称。"""
-    blob = f"{commodity} {dep_type}".lower()
-    for keywords, name in _USGS_KEYWORDS:
-        for kw in keywords:
-            if kw.lower() in blob:
-                return name
-    return None
-
-
-def _query_usgs_mrds(bbox: Tuple[float, float, float, float]) -> List[Dict[str, str]]:
+def _query_usgs_mrds(bbox: Tuple[float, float, float, float]) -> List[Dict[str, Any]]:
     """
     查询 USGS MRDS WFS 返回 bbox 内的矿床点。
-    返回 [{commodity, dep_type, name}, ...] 列表。
+    返回 [{commodity_codes: [..], name}, ...] 列表。
+
+    要点(均经在线服务实测):
+      - WFS GetFeature 仅支持 GML 输出(text/xml; subtype=gml/3.1.1),不支持 JSON。
+      - version=1.1.0 + EPSG:4326 时 bbox 轴序为 lat,lon(不是 lon,lat)。
+      - mrds 图层无 dep_type/commod1 字段,矿种在 code_list(空格分隔的元素代码)。
     """
     try:
         import requests
@@ -166,69 +127,56 @@ def _query_usgs_mrds(bbox: Tuple[float, float, float, float]) -> List[Dict[str, 
         "version":      "1.1.0",
         "request":      "GetFeature",
         "typeName":     "mrds",
-        "outputFormat": "application/json",
-        "bbox":         f"{min_lon},{min_lat},{max_lon},{max_lat},EPSG:4326",
+        "outputFormat": "text/xml; subtype=gml/3.1.1",
+        # WFS 1.1.0 + EPSG:4326 轴序为 lat,lon
+        "bbox":         f"{min_lat},{min_lon},{max_lat},{max_lon},EPSG:4326",
         "maxFeatures":  USGS_MAX_FEATURES,
     }
     try:
         r = requests.get(USGS_MRDS_ENDPOINT, params=params, timeout=USGS_TIMEOUT)
         r.raise_for_status()
-        data = r.json()
+        root = ET.fromstring(r.content)
     except Exception as e:
         logger.warning(f"USGS MRDS 查询失败: {e}")
         return []
 
-    out = []
-    for feat in data.get("features", []):
-        props = feat.get("properties", {}) or {}
-        commodity = str(props.get("commod1", "") or "")
-        dep_type = str(props.get("dep_type", "") or "")
-        name = str(props.get("site_name", "") or "")
-        if commodity or dep_type:
-            out.append({"commodity": commodity, "dep_type": dep_type, "name": name})
+    out: List[Dict[str, Any]] = []
+    for feat in root.iter(f"{_MS_NS}mrds"):
+        name_el = feat.find(f"{_MS_NS}site_name")
+        code_el = feat.find(f"{_MS_NS}code_list")
+        name = (name_el.text or "").strip() if name_el is not None else ""
+        codes_raw = (code_el.text or "").strip() if code_el is not None else ""
+        codes = [c.strip().upper() for c in codes_raw.split() if c.strip()]
+        if codes or name:
+            out.append({"commodity_codes": codes, "name": name})
     return out
 
 
-def _infer_from_usgs(roi_geojson: Dict[str, Any]) -> Dict[str, Dict[str, Any]]:
+def _usgs_nearby_context(roi_geojson: Dict[str, Any]) -> Dict[str, Any]:
     """
-    返回 {deposit_type_name: {confidence, evidence, source, hit_count}}
-    confidence: 命中数越多越高,clipped to [0, 1]
+    返回 ROI 周边已知矿点的矿种佐证:
+        {commodities: set[中文矿种名], sample_sites: [矿点名, ...]}
+    用于喂给 LLM 提示词 + 对候选做佐证加权。失败/无网络时返回空集合。
     """
+    empty = {"commodities": set(), "sample_sites": []}
     bbox = _roi_bbox(roi_geojson)
     if not bbox:
-        return {}
+        return empty
 
     records = _query_usgs_mrds(bbox)
     if not records:
-        return {}
+        return empty
 
-    # 命中聚合
-    type_hits: Dict[str, List[str]] = defaultdict(list)
+    commodities: set = set()
+    sample_sites: List[str] = []
     for r in records:
-        name = _match_usgs_record(r["commodity"], r["dep_type"])
-        if name:
-            label = r["name"] or f"{r['commodity']} {r['dep_type']}".strip()
-            type_hits[name].append(label)
-
-    out = {}
-    for name, hits in type_hits.items():
-        # confidence: 1 个命中 0.55,3 个 0.80,5+ 个 0.95
-        n = len(hits)
-        if n == 1:
-            conf = 0.55
-        elif n == 2:
-            conf = 0.70
-        elif n <= 4:
-            conf = 0.85
-        else:
-            conf = 0.95
-        sample_names = ", ".join(hits[:3])
-        evidence = f"USGS MRDS 在 ROI 周边({USGS_BUFFER_DEG}°缓冲)发现 {n} 个相关矿点(示例: {sample_names})"
-        out[name] = {
-            "confidence": conf, "evidence": evidence,
-            "source": "USGS MRDS", "hit_count": n,
-        }
-    return out
+        for code in r["commodity_codes"]:
+            cn = _CODE_TO_COMMODITY.get(code)
+            if cn:
+                commodities.add(cn)
+        if r["name"] and r["name"] not in sample_sites and len(sample_sites) < 8:
+            sample_sites.append(r["name"])
+    return {"commodities": commodities, "sample_sites": sample_sites}
 
 
 # ─────────────────────────────────────────────
@@ -306,26 +254,31 @@ _LLM_TOOL_SCHEMA = {
 }
 
 
-def _infer_from_llm(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Dict[str, Any]]:
+def _infer_from_llm(
+    roi_geojson: Dict[str, Any],
+    top_k: int = 3,
+    usgs_context: Optional[Dict[str, Any]] = None,
+) -> Tuple[Dict[str, Dict[str, Any]], str]:
     """
     调 DeepSeek (deepseek-chat) 推理,OpenAI 兼容 API。
-    返回 {deposit_type_name: {confidence, evidence, source}}。
-    无 API key / SDK / 网络失败时返回 {}。
+    返回 (results, reason):
+      results = {deposit_type_name: {confidence, evidence, source}}
+      reason  = 空串表示成功;否则为降级原因(无 key / 无 SDK / 调用失败等)。
     """
     api_key = os.environ.get("DEEPSEEK_API_KEY", "").strip()
     if not api_key:
         logger.info("DEEPSEEK_API_KEY 未设置,跳过 LLM 推理")
-        return {}
+        return {}, "未配置 DEEPSEEK_API_KEY,无法自动识别矿床类型,请手动选择"
 
     try:
         from openai import OpenAI
     except ImportError:
         logger.warning("openai SDK 未安装,跳过 LLM 推理")
-        return {}
+        return {}, "未安装 openai SDK,无法调用 LLM,请手动选择"
 
     bbox = _roi_bbox(roi_geojson)
     if not bbox:
-        return {}
+        return {}, "ROI 几何无效,无法提取坐标"
     min_lon, min_lat, max_lon, max_lat = bbox
     center_lon = (min_lon + max_lon) / 2
     center_lat = (min_lat + max_lat) / 2
@@ -333,12 +286,22 @@ def _infer_from_llm(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Di
     enum_str = "\n".join(f"- {n}" for n in all_deposit_type_names())
     system_text = _LLM_SYSTEM_TEMPLATE.format(top_k=top_k, deposit_type_enum=enum_str)
 
-    user_text = (
+    user_lines = [
         f"ROI 边界: 经度 [{min_lon:.4f}, {max_lon:.4f}],"
-        f"纬度 [{min_lat:.4f}, {max_lat:.4f}]\n"
-        f"ROI 中心: ({center_lon:.4f}°E, {center_lat:.4f}°N)\n\n"
-        f"请调用 report_deposit_types 工具,给出 top-{top_k} 候选。"
-    )
+        f"纬度 [{min_lat:.4f}, {max_lat:.4f}]",
+        f"ROI 中心: ({center_lon:.4f}°E, {center_lat:.4f}°N)",
+    ]
+    # USGS 周边矿种佐证(若有)注入提示词
+    nearby = (usgs_context or {}).get("commodities") or set()
+    sites = (usgs_context or {}).get("sample_sites") or []
+    if nearby:
+        line = f"参考: USGS MRDS 在 ROI 周边已知矿点涉及矿种: {', '.join(sorted(nearby))}"
+        if sites:
+            line += f";示例矿点: {', '.join(sites[:5])}"
+        line += "。请结合该矿种线索判断,但矿床类型仍须从给定枚举中选择。"
+        user_lines.append(line)
+    user_lines.append(f"\n请调用 report_deposit_types 工具,给出 top-{top_k} 候选。")
+    user_text = "\n".join(user_lines)
 
     try:
         client = OpenAI(api_key=api_key, base_url=DEEPSEEK_BASE_URL, timeout=LLM_TIMEOUT)
@@ -354,7 +317,7 @@ def _infer_from_llm(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Di
         )
     except Exception as e:
         logger.warning(f"DeepSeek API 调用失败: {e}")
-        return {}
+        return {}, f"LLM 调用失败: {e}"
 
     # 提取 tool_call 输出
     candidates = []
@@ -367,7 +330,7 @@ def _infer_from_llm(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Di
                 break
     except Exception as e:
         logger.warning(f"DeepSeek 响应解析失败: {e}")
-        return {}
+        return {}, f"LLM 响应解析失败: {e}"
 
     valid_names = set(all_deposit_type_names())
     out = {}
@@ -382,42 +345,39 @@ def _infer_from_llm(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Di
             "confidence": conf, "evidence": evidence,
             "source": f"DeepSeek ({DEEPSEEK_MODEL})",
         }
-    return out
+    return out, ""
 
 
 # ─────────────────────────────────────────────
-# 合并 + 主入口
+# 主入口
 # ─────────────────────────────────────────────
 
-def infer_deposit_types(roi_geojson: Dict[str, Any], top_k: int = 3) -> List[Dict[str, Any]]:
+def infer_deposit_types_detailed(roi_geojson: Dict[str, Any], top_k: int = 3) -> Dict[str, Any]:
     """
-    主入口: 返回 top-k 候选矿床类型列表(按 confidence 降序)。
-    每项: {deposit_type, confidence, evidence, source}
-    """
-    db_results = _infer_from_usgs(roi_geojson)
-    llm_results = _infer_from_llm(roi_geojson, top_k=max(top_k, 3))
+    主入口(带降级原因): 返回 {candidates, reason}。
+      candidates: top-k 候选列表,每项 {deposit_type, confidence, evidence, source}
+      reason:     空串表示正常;否则为降级原因(供前端 hint 展示)。
 
-    # 动态权重:
-    # - 两边都有 → 0.6 × DB + 0.4 × LLM(数据库为主)
-    # - 只有 LLM(USGS 无返回/网络失败) → LLM 权重提到 1.0,直接用原始置信度
-    # - 只有 DB → 用 DB 原始置信度(不再×0.6,避免无谓衰减)
+    流程: LLM 推理(主)→ USGS 周边矿种佐证加权 → 排序 top-k。
+    USGS 只负责佐证,不直接产出矿床类型。
+    """
+    usgs = _usgs_nearby_context(roi_geojson)
+    nearby = usgs["commodities"]
+
+    llm_results, reason = _infer_from_llm(roi_geojson, top_k=max(top_k, 3), usgs_context=usgs)
+
     merged: Dict[str, Dict[str, Any]] = {}
-    all_names = set(db_results) | set(llm_results)
-    for name in all_names:
-        db = db_results.get(name)
-        llm = llm_results.get(name)
-        if db and llm:
-            conf = W_DB * db["confidence"] + W_LLM * llm["confidence"]
-            evidence = f"{db['evidence']};同时 AI 推理 {llm['evidence']}"
-            source = f"{db['source']} + {llm['source']}"
-        elif db:
-            conf = db["confidence"]
-            evidence = db["evidence"]
-            source = db["source"]
-        else:  # LLM only
-            conf = llm["confidence"]
-            evidence = llm["evidence"]
-            source = llm["source"]
+    for name, info in llm_results.items():
+        conf = info["confidence"]
+        evidence = info["evidence"]
+        source = info["source"]
+        # 周边矿种命中 → 佐证加权
+        meta = get_deposit_type_meta(name)
+        commodity = meta["commodity"] if meta else ""
+        if commodity and commodity in nearby:
+            conf = min(1.0, conf + USGS_CORROBORATION_BONUS)
+            evidence = f"{evidence};USGS MRDS 周边见同类矿种({commodity})佐证"
+            source = f"{source} + USGS MRDS佐证"
         merged[name] = {
             "deposit_type": name,
             "confidence":   round(conf, 3),
@@ -425,21 +385,42 @@ def infer_deposit_types(roi_geojson: Dict[str, Any], top_k: int = 3) -> List[Dic
             "source":       source,
         }
 
-    sorted_list = sorted(merged.values(), key=lambda x: -x["confidence"])
-    return sorted_list[:top_k]
+    sorted_list = sorted(merged.values(), key=lambda x: -x["confidence"])[:top_k]
+    if not sorted_list and not reason:
+        reason = "LLM 未返回有效候选,请手动选择"
+    return {"candidates": sorted_list, "reason": reason}
+
+
+def infer_deposit_types(roi_geojson: Dict[str, Any], top_k: int = 3) -> List[Dict[str, Any]]:
+    """主入口(兼容旧调用): 仅返回 top-k 候选列表。"""
+    return infer_deposit_types_detailed(roi_geojson, top_k)["candidates"]
 
 
 if __name__ == "__main__":
-    # 演示: 智利斑岩铜矿带某处 (Chuquicamata 附近)
-    demo_roi = {
-        "type": "Polygon",
-        "coordinates": [[
-            [-68.95, -22.30], [-68.85, -22.30],
-            [-68.85, -22.40], [-68.95, -22.40],
-            [-68.95, -22.30],
-        ]],
-    }
-    print("=== Chuquicamata (智利斑岩铜矿带) ===")
-    for c in infer_deposit_types(demo_roi, top_k=3):
-        print(f"  [{c['confidence']:.2f}] {c['deposit_type']}  ({c['source']})")
-        print(f"         {c['evidence']}")
+    demos = [
+        ("Chuquicamata (智利斑岩铜矿带)", {
+            "type": "Polygon",
+            "coordinates": [[
+                [-68.95, -22.30], [-68.85, -22.30],
+                [-68.85, -22.40], [-68.95, -22.40],
+                [-68.95, -22.30],
+            ]],
+        }),
+        ("胶东招远-莱州金矿带", {
+            "type": "Polygon",
+            "coordinates": [[
+                [120.30, 37.30], [120.50, 37.30],
+                [120.50, 37.45], [120.30, 37.45],
+                [120.30, 37.30],
+            ]],
+        }),
+    ]
+    for title, roi in demos:
+        print(f"=== {title} ===")
+        res = infer_deposit_types_detailed(roi, top_k=3)
+        if not res["candidates"]:
+            print(f"  (降级) {res['reason']}")
+        for c in res["candidates"]:
+            print(f"  [{c['confidence']:.2f}] {c['deposit_type']}  ({c['source']})")
+            print(f"         {c['evidence']}")
+        print()

@@ -15,14 +15,14 @@ from flask import Flask, render_template, request, jsonify, Response, send_file
 from datetime import datetime
 import traceback
 
-# 导入预处理模块
-from atmospheric_correction import (
-    atmospheric_correction, LANDSAT8_BANDS
-)
-from geometric_correction import (
-    geometric_correction, GroundControlPoint, LANDSAT8_PROJECTION
-)
-from interference_removal import remove_interference, apply_mask
+# 从项目根目录的 .env 加载环境变量(如 DEEPSEEK_API_KEY),
+# 让密钥持久化、无需每次手动 export。必须在导入会读取 env 的项目模块之前调用。
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).parent / ".env")
+except ImportError:
+    pass  # 未安装 python-dotenv 时退回到纯环境变量方式
+
 from alteration_analysis import (
     analyze_alteration, get_supported_minerals, MINERAL_CATALOG,
     analyze_single, analyze_batch, build_roi_mask, AlterationResult, BatchResult,
@@ -31,7 +31,7 @@ from alteration_db import (
     list_commodities, list_deposit_types,
     get_recommended_targets, get_targets_multi_sensor, get_deposit_type_meta,
 )
-from deposit_type_inference import infer_deposit_types
+from deposit_type_inference import infer_deposit_types_detailed
 from delivery_project import (
     DELIVERY_ROOT, list_projects, open_project_from_upload,
     resolve_project_dir, load_sensor_data, list_available_sensors,
@@ -40,7 +40,6 @@ from delivery_project import (
     load_prisma_data, PRISMA_KEY, get_prisma_metadata_paths,
 )
 from basemap_provider import fetch_satellite_basemap
-from clustering_analysis import analyze_clustering
 from alteration_store import (
     save_batch_run, list_runs, load_manifest, resolve_file, results_root,
     make_run_rasters_zip,
@@ -82,94 +81,6 @@ def get_band_files(directory: Path) -> list:
     if not band_files:
         return []
     return sorted(band_files, key=lambda f: _band_sort_key(f.name))
-
-
-def group_bands_by_resolution(band_files: list) -> dict:
-    """
-    按像元分辨率将波段文件分组，用于 ASTER 等多分辨率传感器。
-
-    Returns
-    -------
-    dict
-        {分辨率标签: [文件路径列表]}，如 {"15m": [...], "30m": [...], "90m": [...]}
-        文件列表内部保持原波段顺序。
-    """
-    import rasterio
-    from collections import defaultdict
-
-    groups = defaultdict(list)
-    for bf in band_files:
-        with rasterio.open(bf) as src:
-            pixel_size = round(abs(src.res[0]))   # 取 y 方向像元大小（米）
-            label = f"{pixel_size}m"
-        groups[label].append(bf)
-    return dict(groups)
-
-
-def scan_directory(directory: str) -> dict:
-    """
-    递归扫描目录，自动识别两种影像组织方式：
-    1. 多波段单文件（.tif/.tiff/.npy）
-    2. 每波段一个文件（B1.tif, B2.tif ...），以场景目录为处理单元
-    """
-    results = {"total": 0, "files": []}
-
-    try:
-        root = Path(directory)
-        if not root.exists():
-            return results
-
-        visited_dirs = set()
-
-        for f in sorted(root.rglob("*")):
-            # 单波段目录模式：该目录含 B1.tif 等
-            if f.is_file() and BAND_FILE_PATTERN.match(f.name):
-                scene_dir = f.parent
-                if scene_dir in visited_dirs:
-                    continue
-                visited_dirs.add(scene_dir)
-                band_files = get_band_files(scene_dir)
-                if not band_files:
-                    continue
-                rel_dir = str(scene_dir.relative_to(root)) if scene_dir != root else scene_dir.name
-                total_size = sum(b.stat().st_size for b in band_files) / (1024 * 1024)
-
-                # 检测是否多分辨率（ASTER 等）
-                try:
-                    import rasterio
-                    res_groups = group_bands_by_resolution(band_files)
-                except Exception:
-                    res_groups = {}
-
-                multi_res = len(res_groups) > 1
-                results["files"].append({
-                    "name": f"{scene_dir.name} ({len(band_files)} 波段)",
-                    "path": str(scene_dir),
-                    "rel_path": rel_dir,
-                    "size": total_size,
-                    "mode": "aster_multi_res" if multi_res else "bands",
-                    "band_count": len(band_files),
-                    "res_groups": {k: [str(f) for f in v] for k, v in res_groups.items()} if multi_res else {},
-                })
-                continue
-
-            # 多波段单文件模式
-            if f.is_file() and f.suffix.lower() in SUPPORTED_EXTENSIONS:
-                rel_path = str(f.relative_to(root))
-                results["files"].append({
-                    "name": f.name,
-                    "path": str(f),
-                    "rel_path": rel_path,
-                    "size": f.stat().st_size / (1024 * 1024),
-                    "mode": "single",
-                })
-
-        results["total"] = len(results["files"])
-        results["files"].sort(key=lambda x: x["rel_path"])
-    except Exception as e:
-        results["error"] = str(e)
-
-    return results
 
 
 def read_image(image_path: str) -> tuple:
@@ -224,508 +135,6 @@ def read_image(image_path: str) -> tuple:
         return image, profile
 
     return np.load(image_path, allow_pickle=True), None
-
-
-def save_image(image: np.ndarray, output_path: str, profile=None) -> None:
-    """
-    保存影像：有 profile 时保存为 GeoTIFF，否则保存为 .npy
-    """
-    import rasterio
-    suffix = Path(output_path).suffix.lower()
-    if suffix in (".tif", ".tiff") and profile is not None:
-        profile.update(
-            dtype=rasterio.float32,
-            count=image.shape[0],
-            nodata=float('nan')
-        )
-        with rasterio.open(output_path, "w", **profile) as dst:
-            dst.write(image.astype(np.float32))
-    else:
-        np.save(output_path, image)
-
-
-def generate_preview(image_path: str, bands_rgb: tuple = (4, 2, 1)) -> str:
-    """
-    生成影像 RGB 预览图（base64 PNG）
-
-    Parameters
-    ----------
-    image_path : str
-        影像 .npy 路径
-    bands_rgb : tuple
-        用于 RGB 的波段索引（0-based）
-
-    Returns
-    -------
-    str
-        base64 编码的 PNG
-    """
-    try:
-        image, _ = read_image(image_path)
-
-        # 确保在有效范围内
-        if image.shape[0] < max(bands_rgb) + 1:
-            # 波段不够，使用可用波段
-            bands_rgb = tuple(min(i, image.shape[0] - 1) for i in bands_rgb)
-
-        # 提取 RGB 波段并归一化
-        r = image[bands_rgb[0]].astype(np.float32)
-        g = image[bands_rgb[1]].astype(np.float32)
-        b = image[bands_rgb[2]].astype(np.float32)
-
-        # 归一化到 [0, 1]
-        for band in [r, g, b]:
-            valid = band[np.isfinite(band) & (band > 0)]
-            if valid.size == 0:
-                band[:] = 0
-                continue
-            vmin, vmax = np.percentile(valid, [2, 98])
-            if vmax > vmin:
-                band[:] = (band - vmin) / (vmax - vmin)
-            band[~np.isfinite(band)] = 0
-            band[band < 0] = 0
-            band[band > 1] = 1
-
-        # 合成 RGB
-        rgb = np.stack([r, g, b], axis=2)
-
-        # 生成缩略图
-        fig, ax = plt.subplots(figsize=(4, 4), dpi=100)
-        ax.imshow(rgb)
-        ax.axis('off')
-
-        # 转换为 base64
-        buf = io.BytesIO()
-        plt.savefig(buf, format='png', bbox_inches='tight', dpi=100)
-        buf.seek(0)
-        plt.close(fig)
-
-        img_base64 = base64.b64encode(buf.getvalue()).decode('utf-8')
-        return img_base64
-
-    except Exception as e:
-        return None
-
-
-def _warp_to_reference(
-    image: np.ndarray,
-    ref_b64: str,
-    min_match_count: int = 10,
-) -> tuple:
-    """
-    用 OpenCV ORB 特征匹配将卫星影像 warp 到参考图坐标系。
-
-    Parameters
-    ----------
-    image : np.ndarray  shape=(bands, rows, cols)
-    ref_b64 : str       参考图 base64（data:image/...;base64,...）
-    min_match_count : int  最少有效匹配点数
-
-    Returns
-    -------
-    (warped_image, match_count) : (np.ndarray, int)
-    """
-    import cv2
-    from PIL import Image as PILImage
-
-    # 解码参考图 → 灰度
-    _, encoded = ref_b64.split(",", 1)
-    ref_bytes = base64.b64decode(encoded)
-    ref_pil = PILImage.open(io.BytesIO(ref_bytes)).convert("L")
-    ref_gray = np.array(ref_pil, dtype=np.uint8)
-    ref_h, ref_w = ref_gray.shape
-
-    # 将卫星影像渲染为灰度（取所有波段均值，先归一化到 uint8）
-    src_mean = np.mean(image, axis=0).astype(np.float32)
-    valid = src_mean[np.isfinite(src_mean)]
-    lo, hi = (float(np.percentile(valid, 2)), float(np.percentile(valid, 98))) if valid.size > 0 else (0, 1)
-    src_norm = np.clip((src_mean - lo) / max(hi - lo, 1e-6), 0, 1)
-    src_gray = (src_norm * 255).astype(np.uint8)
-
-    # ORB 特征检测与匹配
-    orb = cv2.ORB_create(nfeatures=2000)
-    kp1, des1 = orb.detectAndCompute(src_gray, None)
-    kp2, des2 = orb.detectAndCompute(ref_gray, None)
-
-    if des1 is None or des2 is None or len(kp1) < 4 or len(kp2) < 4:
-        raise ValueError("特征点不足，无法完成参考图配准")
-
-    matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=False)
-    raw_matches = matcher.knnMatch(des1, des2, k=2)
-
-    # Lowe's ratio test
-    good = [m for m, n in raw_matches if m.distance < 0.75 * n.distance]
-
-    if len(good) < min_match_count:
-        raise ValueError(
-            f"有效匹配点 {len(good)} 个，少于最低要求 {min_match_count} 个。"
-            "请换一张与卫星影像地物更相似的参考图，或降低最少匹配点数。"
-        )
-
-    src_pts = np.float32([kp1[m.queryIdx].pt for m in good]).reshape(-1, 1, 2)
-    dst_pts = np.float32([kp2[m.trainIdx].pt for m in good]).reshape(-1, 1, 2)
-
-    H, mask = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
-    if H is None:
-        raise ValueError("单应矩阵计算失败，匹配点分布可能不均匀")
-
-    inlier_count = int(mask.sum())
-
-    # 对每个波段做 warp
-    bands = image.shape[0]
-    warped = np.zeros((bands, ref_h, ref_w), dtype=np.float32)
-    for b in range(bands):
-        band = image[b].astype(np.float32)
-        warped[b] = cv2.warpPerspective(band, H, (ref_w, ref_h),
-                                         flags=cv2.INTER_LINEAR,
-                                         borderMode=cv2.BORDER_CONSTANT,
-                                         borderValue=np.nan)
-
-    return warped, inlier_count
-
-
-def ensure_output_directory(output_dir: str, rel_path: str) -> Path:
-    """
-    确保输出目录存在，保留子目录结构
-    """
-    out_path = Path(output_dir) / Path(rel_path).parent
-    out_path.mkdir(parents=True, exist_ok=True)
-    return out_path
-
-
-def _save_masks(output_path: str, profile, interference_result, callback=None) -> dict:
-    """
-    把 RemovalResult 的 5 张二值 mask 各自保存到主输出同目录，命名为
-      <stem-without-_corrected>_mask_<kind><suffix>
-    主输出为 .tif/.tiff 时写成 uint8 单波段 GeoTIFF；为 .npy 时直接 np.save。
-    失败不抛，仅 callback 一条 warning。返回 {kind: path} 成功落盘的字典。
-    """
-    if interference_result is None:
-        return {}
-    out = Path(output_path)
-    base_stem = out.stem
-    if base_stem.endswith('_corrected'):
-        base_stem = base_stem[:-len('_corrected')]
-    suffix = out.suffix.lower()
-
-    mask_specs = [
-        ('vegetation', getattr(interference_result, 'vegetation_mask', None)),
-        ('water',      getattr(interference_result, 'water_mask',      None)),
-        ('cloud',      getattr(interference_result, 'cloud_mask',      None)),
-        ('snow',       getattr(interference_result, 'snow_mask',       None)),
-        ('buildup',    getattr(interference_result, 'buildup_mask',    None)),
-    ]
-    paths = {}
-    for kind, m in mask_specs:
-        if m is None:
-            continue
-        mask_path = out.with_name(f'{base_stem}_mask_{kind}{out.suffix}')
-        try:
-            mask_u8 = m.astype(np.uint8)
-            if suffix in ('.tif', '.tiff') and profile is not None:
-                import rasterio
-                mp = profile.copy()
-                mp.update(count=1, dtype=rasterio.uint8, nodata=None)
-                with rasterio.open(str(mask_path), 'w', **mp) as dst:
-                    dst.write(mask_u8[np.newaxis, :, :])
-            else:
-                np.save(str(mask_path), mask_u8)
-            paths[kind] = str(mask_path)
-        except Exception as e:
-            if callback:
-                callback(f"  ⚠ 保存 mask_{kind} 失败：{e}")
-    return paths
-
-
-def _run_pipeline(image: np.ndarray, params: dict, label: str, res_label, callback):
-    """
-    对单组波段数据执行：大气校正 → 几何校正 → 干扰剔除。
-    返回 (image, interference_result_or_None)。
-
-    Parameters
-    ----------
-    image : np.ndarray  shape=(bands, rows, cols)
-    params : dict       来自前端的参数
-    label : str         文件/场景名（用于日志）
-    res_label : str|None  分辨率标签（ASTER 模式）
-    callback : callable|None
-
-    Returns
-    -------
-    np.ndarray  处理后的影像
-    """
-    tag = f"[{res_label}] " if res_label else ""
-    interference_result = None  # ASTER / 其它跳过分支保持 None
-
-    # 步骤 1：大气校正
-    sensor = params.get("sensor", "Landsat8/9")
-    is_l2 = sensor.endswith("_L2")  # L2 产品已是地表反射率，跳过大气校正
-
-    if callback:
-        callback(f"  {tag}【步骤 1】大气校正")
-    if is_l2:
-        if callback:
-            callback(f"  {tag}  L2 产品已含地表反射率，跳过大气校正")
-    else:
-        atmo_method = params.get("atmo_method", "dos")
-        solar_zenith = float(params.get("solar_zenith", 30.0))
-        aot550 = float(params.get("aot550", 0.1))
-        altitude = float(params.get("altitude", 0.0))
-
-        # 波段数预检：DOS 路径需要至少 NIR/RED 两个波段做 NDVI 识别暗目标
-        min_required = max(LANDSAT8_BANDS.red, LANDSAT8_BANDS.nir) + 1  # = 5
-        if image.shape[0] < min_required:
-            raise ValueError(
-                f"DOS 大气校正需要至少 {min_required} 个波段（按 Landsat8/9 顺序 含 RED/NIR），"
-                f"当前文件仅 {image.shape[0]} 个波段。"
-                f"请使用多波段影像（如完整的 Landsat 多波段 GeoTIFF），"
-                f"或把分散的单波段文件命名成 B1.tif/B2.tif… 放在同一目录后再扫描。"
-            )
-
-        # 只对光学波段做大气校正（Landsat8/9 B1-B7，共 7 个）
-        n_optical = min(image.shape[0], 7)
-        tir_bands = image[n_optical:] if image.shape[0] > n_optical else None
-        atmo_result = atmospheric_correction(
-            image[:n_optical],
-            band_cfg=LANDSAT8_BANDS,
-            solar_zenith=solar_zenith,
-            method=atmo_method,
-            aot550=aot550,
-            altitude=altitude
-        )
-        image = atmo_result.surface_reflectance
-        if tir_bands is not None:
-            image = np.concatenate([image, tir_bands], axis=0)
-
-    # 步骤 2：几何校正
-    if callback:
-        callback(f"  {tag}【步骤 2】几何校正")
-    if is_l2:
-        if callback:
-            callback(f"  {tag}  L2 产品已完成几何校正，跳过")
-    else:
-        geom_method = params.get("geom_method", "affine")
-
-        if geom_method == "reference":
-            ref_b64 = params.get("ref_image")
-            if not ref_b64:
-                if callback:
-                    callback(f"  {tag}  ⚠ 未提供参考图，跳过参考图配准")
-            else:
-                min_match = int(params.get("min_match_count", 10))
-                if callback:
-                    callback(f"  {tag}  参考图配准中（ORB 特征匹配）...")
-                image, match_count = _warp_to_reference(image, ref_b64, min_match)
-                if callback:
-                    callback(f"  {tag}  配准完成，使用匹配点: {match_count}")
-        else:
-            pixel_size = float(params.get("pixel_size", 30.0))
-            interpolation = params.get("interpolation", "bilinear")
-
-            rows, cols = image.shape[1], image.shape[2]
-            gcps = [
-                GroundControlPoint(pixel_x=0,    pixel_y=0,    geo_x=0.0,                      geo_y=100.0),
-                GroundControlPoint(pixel_x=cols, pixel_y=0,    geo_x=cols*pixel_size/111000,    geo_y=100.0),
-                GroundControlPoint(pixel_x=0,    pixel_y=rows, geo_x=0.0,                       geo_y=100-rows*pixel_size/111000),
-            ]
-            if geom_method == "polynomial":
-                gcps.extend([
-                    GroundControlPoint(pixel_x=cols//2, pixel_y=0,      geo_x=(cols//2)*pixel_size/111000, geo_y=100.0),
-                    GroundControlPoint(pixel_x=cols,    pixel_y=rows,   geo_x=cols*pixel_size/111000,      geo_y=100-rows*pixel_size/111000),
-                    GroundControlPoint(pixel_x=0,       pixel_y=rows//2,geo_x=0.0,                         geo_y=100-(rows//2)*pixel_size/111000),
-                    GroundControlPoint(pixel_x=cols//2, pixel_y=rows//2,geo_x=(cols//2)*pixel_size/111000, geo_y=100-(rows//2)*pixel_size/111000),
-                    GroundControlPoint(pixel_x=cols,    pixel_y=rows//2,geo_x=cols*pixel_size/111000,      geo_y=100-(rows//2)*pixel_size/111000),
-                    GroundControlPoint(pixel_x=cols//2, pixel_y=rows,   geo_x=(cols//2)*pixel_size/111000, geo_y=100-rows*pixel_size/111000),
-                ])
-
-            geom_result = geometric_correction(image, gcps=gcps, method=geom_method, interpolation=interpolation)
-            image = geom_result.corrected_image
-
-    # 步骤 3：干扰剔除
-    if callback:
-        callback(f"  {tag}【步骤 3】干扰剔除")
-    sensor_base = sensor.replace("_L2", "")  # 去掉 L2 后缀统一判断
-    if sensor_base == "ASTER":
-        # ASTER SWIR/TIR 波段不含标准 NIR，无法计算 NDVI/NDWI，跳过干扰剔除
-        if callback:
-            callback(f"  {tag}  ASTER 传感器：跳过干扰剔除（波段无标准 NIR）")
-    else:
-        if sensor_base == "Sentinel2":
-            from interference_removal import SENTINEL2_BANDS
-            band_cfg = SENTINEL2_BANDS
-        else:
-            band_cfg = LANDSAT8_BANDS
-
-        # L2 整数格式（反射率×10000）需先归一化到 [0,1] 再做指数计算
-        scale = 1.0
-        if is_l2 and image.max() > 10.0:
-            scale = 10000.0
-            image = image / scale
-
-        # 把前端两个滑块的值塞进 MaskThresholds：
-        #   ndvi_threshold ∈ [0, 1] 直接对应 ndvi_veg
-        #   cloud_threshold ∈ [0, 100]（保守→激进）反向线性映射到 cloud_blue：
-        #     slider=0   → cloud_blue=0.50（最保守，几乎不标云）
-        #     slider=100 → cloud_blue=0.05（最激进，大量标云）
-        from interference_removal import MaskThresholds as _MT
-        try:
-            ndvi_v = float(params.get("ndvi_threshold", 0.20))
-        except (TypeError, ValueError):
-            ndvi_v = 0.20
-        try:
-            cloud_pct = float(params.get("cloud_threshold", 75))
-        except (TypeError, ValueError):
-            cloud_pct = 75.0
-        cloud_pct = max(0.0, min(100.0, cloud_pct))
-        cloud_blue_v = 0.50 - (cloud_pct / 100.0) * 0.45
-        thresholds = _MT(ndvi_veg=ndvi_v, cloud_blue=cloud_blue_v)
-        if callback:
-            callback(f"  {tag}  阈值: NDVI>{ndvi_v:.2f} 判为植被，云敏感度 {cloud_pct:.0f}%（蓝反射>{cloud_blue_v:.2f} 判为云）")
-        interference_result = remove_interference(image, band_cfg=band_cfg, thresholds=thresholds)
-
-        # 按用户勾选项组合掩膜（默认只剔除云）
-        mask = np.zeros(image.shape[1:], dtype=bool)
-        if params.get("mask_vegetation", False):
-            mask |= interference_result.vegetation_mask
-        if params.get("mask_water", False):
-            mask |= interference_result.water_mask
-        if params.get("mask_cloud", False):
-            mask |= interference_result.cloud_mask
-        if params.get("mask_snow", False):
-            mask |= interference_result.snow_mask
-        if params.get("mask_buildup", False):
-            mask |= interference_result.buildup_mask
-
-        image = apply_mask(image, mask)
-
-        # 还原原始量纲
-        if scale != 1.0:
-            image = image * scale
-
-    return image, interference_result
-
-
-def process_single_file(
-    input_path: str,
-    output_dir: str,
-    rel_path: str,
-    params: dict,
-    file_info: dict,
-    callback=None
-) -> dict:
-    """
-    处理单个影像文件（三步流水线）
-
-    Parameters
-    ----------
-    input_path : str
-        输入 .npy 文件路径
-    output_dir : str
-        输出目录
-    rel_path : str
-        相对路径（用于保留目录结构）
-    params : dict
-        处理参数
-    callback : callable
-        进度回调函数
-
-    Returns
-    -------
-    dict
-        处理结果
-    """
-    result = {
-        "file": rel_path,
-        "status": "processing",
-        "steps": {},
-        "error": None
-    }
-
-    try:
-        # 读取输入影像
-        if callback:
-            callback(f"读取文件: {rel_path}")
-
-        mode = file_info.get("mode", "single")
-
-        # ── ASTER 多分辨率模式 ──────────────────────────────────
-        if mode == "aster_multi_res":
-            res_groups = file_info.get("res_groups", {})
-            group_results = {}
-            for res_label, band_paths in sorted(res_groups.items()):
-                if callback:
-                    callback(f"  [{res_label}] 处理 {len(band_paths)} 个波段")
-
-                import rasterio
-                bands = []
-                group_profile = None
-                for bf in band_paths:
-                    with rasterio.open(bf) as src:
-                        bands.append(src.read(1).astype(np.float32))
-                        if group_profile is None:
-                            group_profile = src.profile.copy()
-                group_image = np.stack(bands, axis=0)
-                group_profile.update(count=len(bands))
-
-                group_image, group_interference = _run_pipeline(group_image, params, rel_path, res_label, callback)
-
-                # 保存每个分辨率组
-                scene_name = Path(rel_path).name
-                out_dir = Path(output_dir) / rel_path
-                out_dir.mkdir(parents=True, exist_ok=True)
-                out_file = out_dir / f"{scene_name}_{res_label}_corrected.tif"
-                save_image(group_image, str(out_file), group_profile)
-                group_results[res_label] = str(out_file)
-                if callback:
-                    callback(f"  [{res_label}] 已保存 → {out_file.name}")
-
-                # 同步落盘 5 张 mask 副产物（按分辨率组各一套）
-                if group_interference is not None:
-                    mp = _save_masks(str(out_file), group_profile, group_interference, callback)
-                    if mp:
-                        result.setdefault("mask_paths", {})[res_label] = mp
-
-            result["output_groups"] = group_results
-            result["status"] = "success"
-            return result
-        # ── 普通模式（单文件 / 同分辨率波段目录）──────────────────
-
-        image, src_profile = read_image(input_path)
-        result["input_shape"] = tuple(image.shape)
-        image, interference_result = _run_pipeline(image, params, rel_path, None, callback)
-
-        # 保存结果
-        if callback:
-            callback(f"保存结果: {rel_path}")
-
-        ensure_output_directory(output_dir, rel_path)
-
-        if mode == "bands":
-            scene_name = Path(rel_path).name
-            output_file = Path(output_dir) / rel_path / f"{scene_name}_corrected.tif"
-            output_file.parent.mkdir(parents=True, exist_ok=True)
-        else:
-            output_file = Path(output_dir) / rel_path
-            output_file = output_file.with_name(output_file.stem + "_corrected" + output_file.suffix)
-
-        save_image(image, str(output_file), src_profile)
-        result["output_path"] = str(output_file)
-
-        # 同步落盘 5 张 mask 副产物（供蚀变/聚类阶段复用）
-        if interference_result is not None:
-            mp = _save_masks(str(output_file), src_profile, interference_result, callback)
-            if mp:
-                result["mask_paths"] = mp
-
-        result["status"] = "success"
-
-    except Exception as e:
-        result["status"] = "error"
-        result["error"] = str(e)
-        if callback:
-            callback(f"❌ 错误 ({rel_path}): {str(e)}")
-
-    return result
 
 
 # ─────────────────────────────────────────────
@@ -802,190 +211,6 @@ def docs_alteration_reference_md():
     except Exception as e:
         return Response(f"文档读取失败: {e}", status=500, mimetype='text/plain; charset=utf-8')
     return Response(md_text, mimetype='text/markdown; charset=utf-8')
-
-
-@app.route('/api/browse', methods=['POST'])
-def api_browse():
-    """浏览目录内容（用于目录选择对话框）"""
-    data = request.json
-    current = data.get('path', '')
-
-    # 默认从用户主目录开始
-    if not current:
-        current = str(Path.home())
-
-    current = os.path.expanduser(current)
-    current = os.path.abspath(current)
-
-    if not os.path.isdir(current):
-        current = str(Path.home())
-
-    show_files = data.get('show_files', False)
-    FILE_EXTS = {".tif", ".tiff", ".npy", ".jpg", ".jpeg", ".png"}
-
-    try:
-        entries = []
-        for entry in sorted(Path(current).iterdir()):
-            if entry.name.startswith('.'):
-                continue
-            if entry.is_dir():
-                entries.append({
-                    "name": entry.name,
-                    "path": str(entry),
-                    "type": "dir"
-                })
-            elif show_files and entry.is_file() and entry.suffix.lower() in FILE_EXTS:
-                entries.append({
-                    "name": entry.name,
-                    "path": str(entry),
-                    "type": "file"
-                })
-
-        # 计算父目录
-        parent = str(Path(current).parent)
-        if parent == current:
-            parent = None  # 根目录
-
-        return jsonify({
-            "current": current,
-            "parent": parent,
-            "entries": entries
-        })
-    except PermissionError:
-        return jsonify({"error": "没有权限访问该目录"}), 403
-
-
-@app.route('/api/scan', methods=['POST'])
-def api_scan():
-    """扫描目录"""
-    data = request.json
-    directory = data.get('directory', '')
-
-    if not directory:
-        return jsonify({"error": "目录为空"}), 400
-
-    # 展开 ~ 符号
-    directory = os.path.expanduser(directory)
-
-    if not os.path.isdir(directory):
-        return jsonify({"error": f"目录不存在: {directory}"}), 400
-
-    results = scan_directory(directory)
-    return jsonify(results)
-
-
-@app.route('/api/preview', methods=['POST'])
-def api_preview():
-    """生成预览图"""
-    data = request.json
-    file_path = data.get('file_path', '')
-
-    if not file_path or (not os.path.isfile(file_path) and not os.path.isdir(file_path)):
-        return jsonify({"error": "文件不存在"}), 400
-
-    # 同时读一遍计算数值范围统计，便于前端判断"全零/常数"等退化情况
-    stats = None
-    try:
-        arr, _ = read_image(file_path)
-        if arr is not None and arr.size > 0:
-            finite = arr[np.isfinite(arr)]
-            positive_ratio = float((finite > 0).sum()) / float(finite.size) if finite.size else 0.0
-            stats = {
-                "shape": list(arr.shape),
-                "min":   float(np.nanmin(arr)) if finite.size else 0.0,
-                "max":   float(np.nanmax(arr)) if finite.size else 0.0,
-                "mean":  float(np.nanmean(arr)) if finite.size else 0.0,
-                "positive_ratio": positive_ratio,
-            }
-    except Exception:
-        stats = None
-
-    img_base64 = generate_preview(file_path)
-    if img_base64:
-        return jsonify({"preview": f"data:image/png;base64,{img_base64}", "stats": stats})
-    else:
-        return jsonify({"error": "预览生成失败"}), 500
-
-
-@app.route('/api/process', methods=['POST'])
-def api_process():
-    """处理影像（流式返回进度）"""
-    data = request.json
-    input_dir = os.path.expanduser(data.get('input_dir', ''))
-    output_dir = os.path.expanduser(data.get('output_dir', ''))
-    file_list = data.get('files', [])
-    params = data.get('params', {})
-
-    if not input_dir or not output_dir:
-        return jsonify({"error": "输入/输出目录为空"}), 400
-
-    if not file_list:
-        return jsonify({"error": "未选择文件"}), 400
-
-    # 确保输出目录存在
-    Path(output_dir).mkdir(parents=True, exist_ok=True)
-
-    def generate():
-        """生成器：逐个处理文件并返回进度"""
-        results = []
-        total = len(file_list)
-
-        for idx, file_info in enumerate(file_list, 1):
-            file_path = file_info.get('path')
-            rel_path = file_info.get('rel_path')
-
-            # 进度回调
-            def progress_callback(msg: str):
-                yield json.dumps({
-                    "type": "progress",
-                    "current": idx,
-                    "total": total,
-                    "message": msg,
-                    "percent": int((idx - 1 + 0.5) / total * 100)
-                }) + "\n"
-
-            # 处理文件
-            try:
-                result = process_single_file(
-                    file_path, output_dir, rel_path, params, file_info, progress_callback
-                )
-                results.append(result)
-
-                # 文件完成消息
-                yield json.dumps({
-                    "type": "file_complete",
-                    "file": rel_path,
-                    "status": result["status"],
-                    "error": result.get("error"),
-                    "current": idx,
-                    "total": total,
-                    "percent": int(idx / total * 100)
-                }) + "\n"
-            except Exception as e:
-                yield json.dumps({
-                    "type": "file_error",
-                    "file": rel_path,
-                    "error": str(e),
-                    "current": idx,
-                    "total": total
-                }) + "\n"
-
-        # 最终总结
-        successful = sum(1 for r in results if r["status"] == "success")
-        failed = sum(1 for r in results if r["status"] == "error")
-
-        yield json.dumps({
-            "type": "complete",
-            "summary": {
-                "total": total,
-                "successful": successful,
-                "failed": failed
-            },
-            "results": results
-        }) + "\n"
-
-    return Response(generate(), mimetype='application/json')
-
 
 
 # ─────────────────────────────────────────────
@@ -1428,12 +653,13 @@ def api_infer_deposit_type():
             })
 
     try:
-        candidates = infer_deposit_types(roi, top_k=top_k)
+        result = infer_deposit_types_detailed(roi, top_k=top_k)
+        candidates = result["candidates"]
         return jsonify({
             "candidates": candidates,
             "degraded":      len(candidates) == 0,
             "georeferenced": True,
-            "hint":          "自动识别未返回结果,请手动选择" if not candidates else "",
+            "hint":          (result.get("reason") or "自动识别未返回结果,请手动选择") if not candidates else "",
         })
     except Exception as e:
         app.logger.error(f"infer_deposit_type 失败: {e}", exc_info=True)
@@ -1502,6 +728,53 @@ def _structural_assoc_for_sensor(bbox, shape, transform, crs, masks_by_mineral, 
     except Exception as e:
         app.logger.warning(f"构造关联度计算失败,忽略: {e}")
     return out
+
+
+def _compute_prospectivity(score_map, veg_stress_index, shape, transform, crs,
+                           roi_bbox, roi_mask, weights=None):
+    """
+    丛林模式 capstone:收集多证据层融合为成矿有利度。
+
+      E1 alteration   = 蚀变综合得分 score_map
+      E2 veg_stress   = 地植物学胁迫指数(红边)
+      E3 structure    = 构造邻近度(geo-stru 距断裂距离 → 指数衰减)
+      E4 deformation  = InSAR 形变证据(geo-insar deformation_evidence,重投影到本格网)
+
+    任何证据层缺失(数据不存在/重投影失败)静默忽略,prospectivity.fuse_evidence 自适应再归一权重。
+    返回 prospectivity.ProspectivityResult,失败返回 None。
+    """
+    try:
+        import prospectivity as _pr
+    except Exception as e:
+        app.logger.warning(f"prospectivity 模块不可用: {e}")
+        return None
+
+    layers = {"alteration": score_map, "veg_stress": veg_stress_index}
+
+    # E3 构造邻近度
+    try:
+        import structural_weighting as _sw
+        if roi_bbox and transform is not None and crs is not None:
+            sl = _sw.load_structural_layers(roi_bbox, shape, transform, crs)
+            if sl and sl.get("distance") is not None:
+                layers["structure"] = _sw.proximity_from_distance(sl["distance"])
+    except Exception as e:
+        app.logger.info(f"prospectivity 构造证据层缺失,忽略: {e}")
+
+    # E4 InSAR 形变证据
+    try:
+        from commons.insar_broker import find_insar_for_bbox, get_product_path
+        import structural_weighting as _sw
+        if roi_bbox and transform is not None and crs is not None:
+            matches = find_insar_for_bbox(roi_bbox)
+            if matches:
+                dpath = get_product_path(matches[0], "deformation_evidence")
+                if dpath:
+                    layers["deformation"] = _sw._reproject_to(dpath, shape, transform, crs)
+    except Exception as e:
+        app.logger.info(f"prospectivity InSAR 形变证据层缺失,忽略: {e}")
+
+    return _pr.fuse_evidence(layers, weights=weights, roi_mask=roi_mask)
 
 
 def _png_to_datauri(path) -> Optional[str]:
@@ -1698,6 +971,9 @@ def api_analyze_batch():
     # 可选:用 geo-stru 构造解译产物(距断裂邻近度)对蚀变综合得分做构造控矿加权。
     # 默认关闭,开启后不改变各矿物单独结果,仅重排综合得分(近断裂优先)。
     use_structural_prior = bool(data.get("use_structural_prior", False))
+    # 丛林模式:密林区岩石被冠层遮蔽、常规蚀变失效,改为叠加"地植物学胁迫"探测
+    # (矿化/微渗漏导致植物受胁迫 → 红边蓝移/叶绿素↓)。默认关闭,不改变现有行为。
+    jungle_mode = bool(data.get("jungle_mode", False))
 
     if not project_name or not deposit_type:
         return jsonify({"error": "缺少 project_name 或 deposit_type"}), 400
@@ -1797,6 +1073,38 @@ def api_analyze_batch():
             continue
         targets_used.append({**t, "effective_sensor": effective, "notes": notes})
 
+    # ─── 丛林模式:注入通用地植物学胁迫探测目标 ───────────────────────
+    # 该目标与矿种无关,任何矿床类型在丛林模式下均可叠加。当前走 Sentinel-2 红边波段
+    # (B5/B6/B7)的多光谱主路径;EnMAP/PRISMA 仍按各自的 band_depth 正常分析,其红边
+    # 胁迫为后续扩展。effective_sensor 选 usable 的 Sentinel-2,缺失则记 note 并置 None。
+    if jungle_mode:
+        jt_per_sensor = {
+            "Sentinel2": {
+                "ratio_expr": None, "ratio_available": False,
+                "pca_spec": None, "pca_available": False,
+                "band_depth_available": False,
+                "veg_stress_available": True,
+                "veg_stress_spec": {"index": "ndre", "veg_floor": 0.30},
+            }
+        }
+        jungle_target = {
+            "mineral":             "丛林地植物胁迫(红边)",
+            "zone":                "矿化/微渗漏地表植被冠层",
+            "priority":            1,
+            "anomaly_type":        "金属毒害/还原胁迫 → 叶绿素↓、红边蓝移",
+            "absorption_um":       None,
+            "reflectance_peak_um": None,
+            "enmap_feature":       None,
+            "per_sensor":          jt_per_sensor,
+            "preferred_sensor":    "Sentinel2",
+            "_methods":            ["veg_stress"],   # 该目标只跑地植物学胁迫法
+        }
+        jt_eff = "Sentinel2" if "Sentinel2" in usable_sensors else None
+        jt_notes = [] if jt_eff else [
+            "⚠ 丛林模式地植物学胁迫当前需 Sentinel-2 红边波段,项目无可用 Sentinel-2 覆盖"]
+        if selected_minerals is None or jungle_target["mineral"] in (selected_minerals or []):
+            targets_used.append({**jungle_target, "effective_sensor": jt_eff, "notes": jt_notes})
+
     # 按 effective_sensor 分组,每个组装载一次数据
     by_sensor: Dict[str, List[Dict[str, Any]]] = {}
     for t in targets_used:
@@ -1857,6 +1165,7 @@ def api_analyze_batch():
 
         # 每个 mineral 跑两种方法
         sensor_masks: Dict[str, Dict[str, np.ndarray]] = {}  # mineral -> {method: mask}
+        vs_index_holder: Dict[str, np.ndarray] = {}          # 捕获地植物学胁迫指数图(丛林模式)
 
         for t in tlist:
             mineral = t["mineral"]
@@ -1876,14 +1185,18 @@ def api_analyze_batch():
 
             ps = t["per_sensor"].get(sensor_key, {})
             target_spec = {
-                "mineral":         mineral,
-                "ratio_expr":      ps.get("ratio_expr"),
-                "ratio_available": ps.get("ratio_available", False),
-                "pca_spec":        ps.get("pca_spec"),
-                "pca_available":   ps.get("pca_available", False),
+                "mineral":              mineral,
+                "ratio_expr":           ps.get("ratio_expr"),
+                "ratio_available":      ps.get("ratio_available", False),
+                "pca_spec":             ps.get("pca_spec"),
+                "pca_available":        ps.get("pca_available", False),
+                "veg_stress_available": ps.get("veg_stress_available", False),
+                "veg_stress_spec":      ps.get("veg_stress_spec"),
             }
 
-            for m in methods:
+            # 普通蚀变矿物用全局 methods;丛林地植物胁迫目标用自带 _methods(只 veg_stress)
+            t_methods = t.get("_methods") or methods
+            for m in t_methods:
                 if not ps.get(f"{m}_available"):
                     sensor_results[m] = {"unavailable": True,
                                          "reason": f"{sensor_key} 上 {mineral} 不支持 {m}"}
@@ -1911,6 +1224,8 @@ def api_analyze_batch():
                         "sign":          res.sign,
                     }
                     sensor_masks[mineral][m] = res.anomaly_mask
+                    if m == "veg_stress":
+                        vs_index_holder["arr"] = res.index_map
                     save_sensors[sensor_key]["results"].append({
                         "mineral":          mineral,
                         "zone":             t["zone"],
@@ -1937,6 +1252,10 @@ def api_analyze_batch():
         overall_inter = np.zeros((H, W), dtype=bool)
         score_map = np.zeros((H, W), dtype=np.float32)
         for t in tlist:
+            # 丛林地植物胁迫目标不计入"蚀变综合得分":它作为独立证据层(E2)喂给 prospectivity,
+            # 计入 score_map 会与 prospectivity 的 veg_stress 层重复计数。
+            if t.get("_methods") == ["veg_stress"]:
+                continue
             mineral = t["mineral"]
             masks = sensor_masks.get(mineral, {})
             if "ratio" in masks and "pca" in masks:
@@ -1987,6 +1306,52 @@ def api_analyze_batch():
             "high_confidence_pixels": int(overall_inter.sum()),
         }
         overall_high_pixels += int(overall_inter.sum())
+
+        # ─── 丛林模式:多证据成矿预测融合(即使蚀变近空也能输出靶区)───
+        if jungle_mode:
+            try:
+                prosp = _compute_prospectivity(
+                    score_map, vs_index_holder.get("arr"),
+                    (H, W), profile.get("transform"), profile.get("crs"),
+                    roi_bbox, roi_mask)
+                if prosp is not None:
+                    pov = None
+                    if basemap_view is not None:
+                        rc = _render_composite_on_basemap(
+                            basemap_view, prosp.mask, prosp.score,
+                            profile.get("transform"), profile.get("crs"),
+                            roi_geojson, "inferno",
+                            lineaments=struct_lineaments, intersections=struct_intersections)
+                        pov = rc.get("score")
+                    composites_per_sensor[sensor_key]["prospectivity_overlay"] = pov
+                    composites_per_sensor[sensor_key]["prospectivity"] = {
+                        "used_layers":        prosp.used_layers,
+                        "contributions":      {k: round(v, 3) for k, v in prosp.contributions.items()},
+                        "high_target_pixels": int(prosp.mask.sum()),
+                        "high_threshold":     None if not np.isfinite(prosp.threshold) else round(float(prosp.threshold), 4),
+                    }
+                    save_sensors[sensor_key]["composite"]["prospectivity_arr"] = prosp.score
+                    save_sensors[sensor_key]["composite"]["prospectivity_png"] = pov
+                    app.logger.info(
+                        f"丛林模式 prospectivity({sensor_key}): 证据层={prosp.used_layers} "
+                        f"靶区像素={int(prosp.mask.sum())}")
+
+                # 天然出露靶向:报告裸露像元占比(出露像元上的常规蚀变才可信)
+                _expo_bn = {"Sentinel2": ("B2", "B4", "B8", "B11"),
+                            "Landsat8":  ("B2", "B4", "B5", "B6")}.get(sensor_key)
+                if _expo_bn and all(b in bn_map for b in _expo_bn):
+                    import spectral_unmix as _su
+                    bb, rb, nb, sb = (image[bn_map[x]] for x in _expo_bn)
+                    expo = _su.detect_natural_exposures(nb, rb, bb, sb, roi_mask=roi_mask)
+                    composites_per_sensor[sensor_key]["exposure"] = {
+                        "exposure_pixels": expo.stats["exposure_pixels"],
+                        "exposure_ratio":  round(expo.stats["exposure_ratio"], 4),
+                    }
+                    app.logger.info(
+                        f"丛林模式 天然出露({sensor_key}): {expo.stats['exposure_pixels']} 像素 "
+                        f"({expo.stats['exposure_ratio']*100:.1f}%)")
+            except Exception as e:
+                app.logger.warning(f"丛林模式 prospectivity 融合失败({sensor_key}): {e}", exc_info=True)
 
     # ─── 高光谱吸收深度分析(EnMAP / PRISMA,独立于多光谱,作为额外的传感器列)───
     # 两者数据格式不同(EnMAP=单 GeoTIFF+XML,PRISMA=vnir/swir ENVI),但分析路径一致:
@@ -2073,6 +1438,7 @@ def api_analyze_batch():
                 "methods":           methods,
                 "selected_minerals": selected_minerals,
                 "use_structural_prior": use_structural_prior,
+                "jungle_mode":       jungle_mode,
             },
             roi_geojson=roi_geojson,
             available_sensors=sorted(available_sensors),
@@ -2099,6 +1465,7 @@ def api_analyze_batch():
         "composites":        composites_per_sensor,
         "high_confidence_total_pixels": overall_high_pixels,
         "structural":        structural_summary,
+        "jungle_mode":       jungle_mode,
         "saved":             saved_info,
     })
 
@@ -3022,236 +2389,6 @@ def _render_overlay_on_bg(
 
 
 # 用于类型注解（已在顶部导入）
-
-
-@app.route('/api/clustering', methods=['POST'])
-def api_clustering():
-    """
-    对蚀变分析结果执行空间聚类（尖点突破分析）。
-
-    请求体:
-    {
-        "file_path": "/path/to/image.tif",
-        "sensor": "Landsat8/9_L2",
-        "mineral": "iron_oxide",
-        "threshold_method": "mean_std",
-        "k": 1.5,
-        "algorithm": "dbscan",     # "dbscan" | "hierarchical"
-        "eps": 10.0,               # DBSCAN 邻域半径（像元）
-        "min_samples": 5,          # DBSCAN 最小邻居数
-        "n_clusters": 5,           # 层次聚类簇数
-        "density_sigma": 5.0,      # 高斯核 σ
-        "density_threshold": 0.3,  # 突破区密度阈值
-        "min_pixels": 10,          # 突破区最小像元数
-        "colormap": "hot",
-        "bg_image": null           # 可选底图 base64
-    }
-    """
-    data = request.json or {}
-    file_path   = data.get("file_path", "")
-    sensor_raw  = data.get("sensor", "Landsat8/9")
-    sensor      = sensor_raw.replace("_L2", "")
-    mineral     = data.get("mineral", "iron_oxide")
-    threshold_method = data.get("threshold_method", "mean_std")
-    k           = float(data.get("k", 1.5))
-    algorithm   = data.get("algorithm", "dbscan")
-    eps         = float(data.get("eps", 10.0))
-    min_samples = int(data.get("min_samples", 5))
-    n_clusters  = int(data.get("n_clusters", 5))
-    density_sigma     = float(data.get("density_sigma", 5.0))
-    density_threshold = float(data.get("density_threshold", 0.3))
-    min_pixels  = int(data.get("min_pixels", 10))
-    colormap    = data.get("colormap", "hot")
-    bg_b64      = data.get("bg_image", None)
-
-    if not file_path or (not os.path.isfile(file_path) and not os.path.isdir(file_path)):
-        return jsonify({"error": "文件不存在"}), 400
-
-    try:
-        image, _ = read_image(file_path)
-        if sensor_raw.endswith("_L2") and image.max() > 10.0:
-            image = image / 10000.0
-
-        # 先做蚀变分析拿到 anomaly_mask 和 index_map
-        alt_result = analyze_alteration(image, sensor, mineral, threshold_method, k)
-
-        if not np.any(alt_result.anomaly_mask):
-            return jsonify({"error": "蚀变分析未检测到异常像元，无法执行聚类"}), 400
-
-        # 聚类分析
-        cl_result = analyze_clustering(
-            anomaly_mask=alt_result.anomaly_mask,
-            index_map=alt_result.index_map,
-            mineral=mineral,
-            label=alt_result.label,
-            sensor=sensor,
-            algorithm=algorithm,
-            eps=eps,
-            min_samples=min_samples,
-            n_clusters=n_clusters,
-            density_sigma=density_sigma,
-            density_threshold=density_threshold,
-            min_pixels=min_pixels,
-        )
-
-        # 可视化
-        overlay_b64 = _render_clustering_overlay(
-            image, alt_result, cl_result, colormap, bg_b64
-        )
-
-        # 突破区摘要
-        zones_summary = [
-            {
-                "rank": i + 1,
-                "cluster_id": z.cluster_id,
-                "pixel_count": z.pixel_count,
-                "density_score": round(z.density_score, 4),
-                "breakthrough_strength": round(z.breakthrough_strength, 4),
-                "mean_index": round(z.mean_index, 4),
-                "max_index": round(z.max_index, 4),
-                "centroid": list(z.centroid),
-            }
-            for i, z in enumerate(cl_result.breakthrough_zones)
-        ]
-
-        return jsonify({
-            "mineral": cl_result.mineral,
-            "label": cl_result.label,
-            "sensor": cl_result.sensor,
-            "algorithm": cl_result.algorithm,
-            "n_clusters": cl_result.n_clusters,
-            "spatial_autocorrelation": round(cl_result.spatial_autocorrelation, 4),
-            "n_breakthrough_zones": len(cl_result.breakthrough_zones),
-            "breakthrough_zones": zones_summary,
-            "warning": cl_result.warning or alt_result.warning,
-            "overlay": f"data:image/png;base64,{overlay_b64}" if overlay_b64 else None,
-        })
-
-    except ValueError as e:
-        return jsonify({"error": str(e)}), 400
-    except Exception as e:
-        app.logger.error(f"聚类分析失败: {e}", exc_info=True)
-        return jsonify({"error": f"分析失败: {str(e)}"}), 500
-
-
-def _render_clustering_overlay(
-    image: np.ndarray,
-    alt_result,
-    cl_result,
-    colormap: str = "hot",
-    bg_b64: Optional[str] = None,
-    dpi: int = 110,
-) -> Optional[str]:
-    """
-    生成聚类结果可视化：
-      左：密度热力图叠加（底图为参考图或 RGB）
-      右：聚类标签图，突破区用红框标注
-    """
-    try:
-        from matplotlib.patches import Rectangle
-        from matplotlib.colors import ListedColormap
-        import matplotlib.cm as mcm
-
-        # ── 底图 RGB ────────────────────────────────
-        if bg_b64:
-            from PIL import Image as PILImage
-            _, encoded = bg_b64.split(",", 1)
-            bg_pil = PILImage.open(io.BytesIO(base64.b64decode(encoded))).convert("RGB")
-            base_rgb = np.array(bg_pil) / 255.0
-        else:
-            from alteration_analysis import LANDSAT_BANDS, SENTINEL2_BANDS
-            sensor = alt_result.sensor
-            if sensor == "Landsat8/9":
-                b = LANDSAT_BANDS
-                r_i, g_i, b_i = b["red"], b["green"], b["blue"]
-            elif sensor == "Sentinel2":
-                b = SENTINEL2_BANDS
-                r_i, g_i, b_i = b["red"], b["green"], b["blue"]
-            else:
-                r_i, g_i, b_i = min(2, image.shape[0]-1), min(1, image.shape[0]-1), min(0, image.shape[0]-1)
-
-            def _norm(band):
-                v = band[np.isfinite(band) & (band > 0)]
-                if v.size == 0:
-                    return np.zeros_like(band)
-                lo, hi = np.percentile(v, [2, 98])
-                return np.clip((band - lo) / max(hi - lo, 1e-6), 0, 1)
-
-            base_rgb = np.stack([
-                _norm(image[r_i]), _norm(image[g_i]), _norm(image[b_i])
-            ], axis=2)
-
-        # ── 绘图 ────────────────────────────────────
-        fig, axes = plt.subplots(1, 2, figsize=(13, 5), dpi=dpi)
-
-        # 左图：密度热力叠加
-        density = cl_result.density_map
-        # resize density 到 base_rgb 尺寸
-        if base_rgb.shape[:2] != density.shape:
-            from PIL import Image as PILImage
-            d_pil = PILImage.fromarray((density * 255).astype(np.uint8)).resize(
-                (base_rgb.shape[1], base_rgb.shape[0]), PILImage.BILINEAR
-            )
-            density_disp = np.array(d_pil) / 255.0
-        else:
-            density_disp = density
-
-        axes[0].imshow(base_rgb)
-        axes[0].imshow(
-            np.ma.masked_where(density_disp < 0.05, density_disp),
-            cmap=colormap, alpha=0.65, vmin=0, vmax=1, interpolation="bilinear"
-        )
-        axes[0].set_title(f"{cl_result.label} 异常密度热力图", fontsize=11)
-        axes[0].axis("off")
-        sm = plt.cm.ScalarMappable(cmap=colormap, norm=plt.Normalize(0, 1))
-        sm.set_array([])
-        plt.colorbar(sm, ax=axes[0], fraction=0.046, pad=0.04, label="密度")
-
-        # 右图：聚类标签 + 突破区框
-        label_map = cl_result.cluster_label_map.astype(np.float32)
-        label_map[label_map < 0] = np.nan
-        n = cl_result.n_clusters
-        cmap_clusters = plt.get_cmap("tab20", max(n, 1))
-        axes[1].imshow(base_rgb)
-        axes[1].imshow(
-            np.ma.masked_invalid(label_map),
-            cmap=cmap_clusters, alpha=0.6,
-            vmin=0, vmax=max(n - 1, 1), interpolation="nearest"
-        )
-        # 突破区红框
-        for i, z in enumerate(cl_result.breakthrough_zones[:10]):
-            r0, c0, r1, c1 = z.bbox
-            # 如果底图尺寸与标签图不同，需缩放坐标
-            h_ratio = base_rgb.shape[0] / cl_result.cluster_label_map.shape[0]
-            w_ratio = base_rgb.shape[1] / cl_result.cluster_label_map.shape[1]
-            rect = Rectangle(
-                (c0 * w_ratio, r0 * h_ratio),
-                (c1 - c0) * w_ratio, (r1 - r0) * h_ratio,
-                linewidth=1.5, edgecolor='red', facecolor='none'
-            )
-            axes[1].add_patch(rect)
-            axes[1].text(
-                c0 * w_ratio + 2, r0 * h_ratio + 10,
-                f"#{i+1} s={z.breakthrough_strength:.2f}",
-                color='white', fontsize=7,
-                bbox=dict(facecolor='red', alpha=0.6, pad=1, edgecolor='none')
-            )
-        axes[1].set_title(
-            f"聚类分布（{cl_result.n_clusters} 簇，突破区 {len(cl_result.breakthrough_zones)} 个）",
-            fontsize=11
-        )
-        axes[1].axis("off")
-
-        plt.tight_layout()
-        buf = io.BytesIO()
-        plt.savefig(buf, format="png", bbox_inches="tight", dpi=dpi)
-        buf.seek(0)
-        plt.close(fig)
-        return base64.b64encode(buf.getvalue()).decode("utf-8")
-
-    except Exception as e:
-        app.logger.error(f"聚类渲染失败: {e}", exc_info=True)
-        return None
 
 
 @app.errorhandler(500)

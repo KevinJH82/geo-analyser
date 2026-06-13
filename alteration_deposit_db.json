@@ -1024,6 +1024,248 @@
               "typical_pc_index": "PC3或PC4"
             }
           ]
+        },
+        {
+          "type_name": "砂岩型铜矿（滇中式）",
+          "type_en": "Sandstone-hosted (Redbed) Cu, Central-Yunnan type",
+          "tectonic_setting": "陆相红层盆地，氧化-还原界面控矿，层控成矿",
+          "host_rocks": [
+            "紫红色砂岩",
+            "灰绿色砂岩",
+            "泥岩"
+          ],
+          "alteration_zoning": "红层褪色（还原，Fe³⁺→Fe²⁺）→ 辉铜矿-斑铜矿（还原带）→ 黄铜矿-黄铁矿 → 孔雀石/蓝铜矿（地表氧化）",
+          "ore_elements": [
+            "Cu",
+            "Ag",
+            "Co"
+          ],
+          "alterations": [
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头（孔雀石伴生）",
+              "priority": 1,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "层间蚀变",
+              "priority": 2,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "方解石（碳酸盐化）",
+              "zone": "碳酸盐胶结",
+              "priority": 2,
+              "anomaly_type": "CO₃²⁻",
+              "absorption_um": 2.34,
+              "sensor_ratio": {
+                "ASTER": "B13/B14"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B13",
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=碳酸盐化"
+                }
+              }
+            },
+            {
+              "mineral": "高岭石",
+              "zone": "褪色带泥化",
+              "priority": 3,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.16,
+              "reflectance_peak_um": 2.14,
+              "sensor_ratio": {
+                "ASTER": "B4/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B8A/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "硅化",
+              "priority": 3,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "红层中灰绿色褪色条带 + 氧化露头铁染异常，沿层位与褪色界面分布。",
+          "domestic_examples": [
+            "云南六苴铜矿",
+            "云南大姚铜矿",
+            "四川大铜厂"
+          ],
+          "international_examples": [
+            "波兰Kupferschiefer",
+            "美国White Pine"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "Fe³⁺组",
+              "sensor": "ASTER",
+              "target_mineral": "褐铁矿/赤铁矿",
+              "input_bands": [
+                "B1",
+                "B2",
+                "B3",
+                "B4"
+              ],
+              "pc_criterion_summary": "B2载荷为正 / B1载荷为负（铁染亮色）",
+              "typical_pc_index": "PC2或PC3"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "CO₃²⁻组",
+              "sensor": "ASTER",
+              "target_mineral": "方解石",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B13-B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
         }
       ]
     },
@@ -1510,6 +1752,253 @@
                 "B9"
               ],
               "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "热液脉型铅锌矿",
+          "type_en": "Hydrothermal Vein Pb-Zn",
+          "tectonic_setting": "造山带/火山岩区断裂控制，中低温热液脉",
+          "host_rocks": [
+            "碳酸盐岩",
+            "砂板岩",
+            "火山岩"
+          ],
+          "alteration_zoning": "硅化 → 绢云母化（Al-OH）→ 绿泥石化 → 碳酸盐化（方解石/铁锰碳酸盐）",
+          "ore_elements": [
+            "Pb",
+            "Zn",
+            "Ag",
+            "Cu"
+          ],
+          "alterations": [
+            {
+              "mineral": "绢云母",
+              "zone": "近脉蚀变",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "石英脉",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "方解石（碳酸盐化）",
+              "zone": "碳酸盐化",
+              "priority": 1,
+              "anomaly_type": "CO₃²⁻",
+              "absorption_um": 2.34,
+              "sensor_ratio": {
+                "ASTER": "B13/B14"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B13",
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=碳酸盐化"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "围岩",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头",
+              "priority": 2,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "Al-OH(绢云母)+CO₃²⁻(碳酸盐化)异常沿断裂脉带分布，氧化露头见铁染。",
+          "domestic_examples": [
+            "湖南黄沙坪（脉）",
+            "甘肃西成（脉）",
+            "云南金顶（脉）"
+          ],
+          "international_examples": [
+            "加拿大Keno Hill"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "CO₃²⁻组",
+              "sensor": "ASTER",
+              "target_mineral": "方解石",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B13-B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
               "typical_pc_index": "PC3或PC4"
             }
           ]
@@ -2668,6 +3157,469 @@
               "typical_pc_index": "PC3或PC4"
             }
           ]
+        },
+        {
+          "type_name": "热液脉型金矿（石英脉型，玲珑式）",
+          "type_en": "Hydrothermal Quartz-vein Au (Linglong type)",
+          "tectonic_setting": "克拉通边缘/造山带，燕山期花岗岩，受 NE-NNE 向断裂控制的中温热液脉",
+          "host_rocks": [
+            "黑云母花岗岩",
+            "花岗闪长岩",
+            "变质岩"
+          ],
+          "alteration_zoning": "含金石英脉（核心，硅化）→ 黄铁绢英岩化（绢云母+黄铁矿，Al-OH）→ 绿泥石化 → 碳酸盐化外围",
+          "ore_elements": [
+            "Au",
+            "Ag",
+            "Pb",
+            "Zn",
+            "S"
+          ],
+          "alterations": [
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "含金石英脉",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "近脉黄铁绢英岩化",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "脉旁氧化露头",
+              "priority": 2,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "中-远矿",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "方解石（碳酸盐化）",
+              "zone": "外围",
+              "priority": 3,
+              "anomaly_type": "CO₃²⁻",
+              "absorption_um": 2.34,
+              "sensor_ratio": {
+                "ASTER": "B13/B14"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B13",
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=碳酸盐化"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "NE 向线性脉带控制 + 硅化TIR异常 + Al-OH(绢云母)异常沿脉成串展布。",
+          "domestic_examples": [
+            "山东玲珑金矿",
+            "河南文峪金矿",
+            "河北金厂峪金矿"
+          ],
+          "international_examples": [
+            "加拿大Abitibi",
+            "澳大利亚Bendigo"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "破碎带蚀变岩型金矿（焦家式）",
+          "type_en": "Fault-zone Altered-rock-type Au (Jiaojia type)",
+          "tectonic_setting": "胶东型，主干断裂破碎带控矿，燕山期花岗岩，黄铁绢英岩化面状蚀变",
+          "host_rocks": [
+            "二长花岗岩",
+            "碎裂岩",
+            "糜棱岩"
+          ],
+          "alteration_zoning": "黄铁绢英岩化带（硅化+绢云母+黄铁矿，Al-OH，矿体）→ 绢英岩化 → 钾化/绿泥石化 → 青磐岩化外围",
+          "ore_elements": [
+            "Au",
+            "Ag",
+            "S",
+            "Pb"
+          ],
+          "alterations": [
+            {
+              "mineral": "绢云母",
+              "zone": "黄铁绢英岩化带（主含矿带）",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "黄铁绢英岩化带",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头",
+              "priority": 1,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "过渡带",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "钾长石（钾化）",
+              "zone": "钾化",
+              "priority": 3,
+              "anomaly_type": "TIR-Si",
+              "absorption_um": 8.6,
+              "sensor_ratio": {
+                "ASTER_TIR": "B13/B12"
+              }
+            }
+          ],
+          "remote_sensing_signature": "沿主断裂呈面状-带状的 Al-OH(绢云母)+硅化+铁染组合异常，宽数十至数百米。",
+          "domestic_examples": [
+            "山东焦家金矿",
+            "山东新城金矿",
+            "山东三山岛金矿"
+          ],
+          "international_examples": [
+            "加拿大Hemlo"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Fe³⁺组",
+              "sensor": "ASTER",
+              "target_mineral": "褐铁矿/赤铁矿",
+              "input_bands": [
+                "B1",
+                "B2",
+                "B3",
+                "B4"
+              ],
+              "pc_criterion_summary": "B2载荷为正 / B1载荷为负（铁染亮色）",
+              "typical_pc_index": "PC2或PC3"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
         }
       ]
     },
@@ -2875,6 +3827,256 @@
                 "B14"
               ],
               "pc_criterion_summary": "B10载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "热液脉型银多金属矿",
+          "type_en": "Hydrothermal Vein Ag-polymetallic",
+          "tectonic_setting": "火山-次火山岩区或造山带断裂，中低温热液脉，Ag-Pb-Zn 组合",
+          "host_rocks": [
+            "安山岩",
+            "流纹岩",
+            "花岗岩",
+            "板岩"
+          ],
+          "alteration_zoning": "硅化（石英-玉髓脉）→ 绢云母-冰长石化（Al-OH）→ 绿泥石-碳酸盐化 → 青磐岩化",
+          "ore_elements": [
+            "Ag",
+            "Pb",
+            "Zn",
+            "Au",
+            "Mn"
+          ],
+          "alterations": [
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "含银石英-玉髓脉",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "绢云母-冰长石化",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "青磐岩化",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "方解石（碳酸盐化）",
+              "zone": "碳酸盐化",
+              "priority": 2,
+              "anomaly_type": "CO₃²⁻",
+              "absorption_um": 2.34,
+              "sensor_ratio": {
+                "ASTER": "B13/B14"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B13",
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=碳酸盐化"
+                }
+              }
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头",
+              "priority": 3,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "脉带硅化TIR异常 + Al-OH(绢云母)+CO₃²⁻异常组合，沿断裂线性展布。",
+          "domestic_examples": [
+            "河南破山银矿",
+            "内蒙古拜仁达坝",
+            "江西冷水坑银矿"
+          ],
+          "international_examples": [
+            "墨西哥Fresnillo",
+            "玻利维亚Cerro Rico"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "CO₃²⁻组",
+              "sensor": "ASTER",
+              "target_mineral": "方解石",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B13-B14载荷为负",
               "typical_pc_index": "PC3或PC4"
             }
           ]
@@ -3409,6 +4611,263 @@
               "typical_pc_index": "PC3或PC4"
             }
           ]
+        },
+        {
+          "type_name": "陆相火山岩型铁矿（玢岩型，宁芜式）",
+          "type_en": "Volcanic-hosted (Porphyrite) Iron, Ningwu type",
+          "tectonic_setting": "长江中下游陆相火山岩盆地，中性次火山岩（辉石闪长玢岩），钠化-磁铁矿建造",
+          "host_rocks": [
+            "辉石闪长玢岩",
+            "安山岩",
+            "凝灰岩"
+          ],
+          "alteration_zoning": "钠长石化（深部）→ 磁铁矿-阳起石-透辉石（矿体）→ 高岭石化/绢云母化（浅部泥化）→ 碳酸盐化",
+          "ore_elements": [
+            "Fe",
+            "P",
+            "V",
+            "Co"
+          ],
+          "alterations": [
+            {
+              "mineral": "赤铁矿化（红化）",
+              "zone": "矿体氧化露头（磁铁矿→褐铁矿）",
+              "priority": 1,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "青磐岩化",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "浅部蚀变",
+              "priority": 2,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "高岭石",
+              "zone": "浅部泥化",
+              "priority": 2,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.16,
+              "reflectance_peak_um": 2.14,
+              "sensor_ratio": {
+                "ASTER": "B4/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B8A/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "硅化",
+              "priority": 3,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "盆地内火山机构周缘强 Fe³⁺(铁染)异常 + Al-OH(泥化)环带，受环状/放射状断裂控制。",
+          "domestic_examples": [
+            "安徽凹山铁矿",
+            "安徽姑山铁矿",
+            "安徽罗河铁矿（庐枞）"
+          ],
+          "international_examples": [
+            "智利El Laco",
+            "瑞典Kiruna（类比）"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "Fe³⁺组",
+              "sensor": "ASTER",
+              "target_mineral": "褐铁矿/赤铁矿",
+              "input_bands": [
+                "B1",
+                "B2",
+                "B3",
+                "B4"
+              ],
+              "pc_criterion_summary": "B2载荷为正 / B1载荷为负（铁染亮色）",
+              "typical_pc_index": "PC2或PC3"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
         }
       ]
     },
@@ -3727,6 +5186,220 @@
               "group": "Mg-OH组",
               "sensor": "ASTER",
               "target_mineral": "绿泥石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "石英脉-细脉浸染型钨钼矿",
+          "type_en": "Quartz-vein / Stockwork W-Mo",
+          "tectonic_setting": "花岗岩体顶部细脉-网脉及石英脉，与 S 型/高分异花岗岩有关",
+          "host_rocks": [
+            "花岗岩",
+            "花岗斑岩",
+            "角岩"
+          ],
+          "alteration_zoning": "钾化（深部）→ 硅化（含辉钼矿石英细脉网脉）→ 绢云母化（Al-OH）→ 绿泥石化 → 碳酸盐化",
+          "ore_elements": [
+            "Mo",
+            "W",
+            "Bi",
+            "Cu"
+          ],
+          "alterations": [
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "含矿石英细脉网脉",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "绢云母化带",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "钾长石（钾化）",
+              "zone": "深部钾化",
+              "priority": 2,
+              "anomaly_type": "TIR-Si",
+              "absorption_um": 8.6,
+              "sensor_ratio": {
+                "ASTER_TIR": "B13/B12"
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "外围",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头",
+              "priority": 3,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "岩体顶部硅化TIR异常 + 环带状 Al-OH(绢云母)异常，外围 Mg-OH(绿泥石)。",
+          "domestic_examples": [
+            "江西阳储岭钨钼矿",
+            "陕西金堆城（细脉）",
+            "河南南泥湖"
+          ],
+          "international_examples": [
+            "加拿大Logtung"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
               "input_bands": [
                 "B1",
                 "B4",
@@ -4147,6 +5820,257 @@
                 "B6"
               ],
               "pc_criterion_summary": "B4载荷为正 / B5载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "石英脉型黑钨矿（钨锡石英脉型，南岭式）",
+          "type_en": "Quartz-vein Wolframite (W-Sn vein, Nanling type)",
+          "tectonic_setting": "华南加里东-燕山期花岗岩顶部，'五层楼'脉带模型，云英岩化与含矿石英脉共生",
+          "host_rocks": [
+            "黑云母花岗岩",
+            "变质砂岩",
+            "板岩"
+          ],
+          "alteration_zoning": "云英岩化（岩体顶部，白云母+石英，Al-OH+硅化）→ 含黑钨矿石英脉 → 绢云母化 → 绿泥石化围岩",
+          "ore_elements": [
+            "W",
+            "Sn",
+            "Mo",
+            "Bi",
+            "Be"
+          ],
+          "alterations": [
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "含矿石英脉",
+              "priority": 1,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "白云母（云英岩化）",
+              "zone": "岩体顶部云英岩化带",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "脉旁绢云母化",
+              "priority": 2,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "围岩",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "萤石",
+              "zone": "脉内",
+              "priority": 2,
+              "anomaly_type": "Ca-F"
+            },
+            {
+              "mineral": "褐铁矿（铁染）",
+              "zone": "氧化露头",
+              "priority": 3,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            }
+          ],
+          "remote_sensing_signature": "岩体顶部云英岩化 Al-OH(白云母)异常 + 陡倾石英脉带硅化TIR异常，'上脉下体'结构。",
+          "domestic_examples": [
+            "江西西华山钨矿",
+            "江西大吉山钨矿",
+            "湖南柿竹园（脉带）"
+          ],
+          "international_examples": [
+            "葡萄牙Panasqueira",
+            "玻利维亚锡钨矿带"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
               "typical_pc_index": "PC3或PC4"
             }
           ]
@@ -6388,6 +8312,229 @@
                 "B14"
               ],
               "pc_criterion_summary": "B12载荷为正 / B13-B14载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            }
+          ]
+        },
+        {
+          "type_name": "火山岩型铀矿（相山式）",
+          "type_en": "Volcanic-hosted Uranium (Xiangshan type)",
+          "tectonic_setting": "陆相酸性火山-侵入杂岩（流纹英安岩+次火山岩），火山塌陷构造与断裂控矿，中低温热液",
+          "host_rocks": [
+            "流纹英安岩",
+            "碎斑熔岩",
+            "花岗斑岩"
+          ],
+          "alteration_zoning": "钠长石化/赤铁矿化（红化，Fe³⁺）→ 水云母化（绢云母/伊利石，Al-OH）→ 萤石-绿泥石化 → 硅化（玉髓）",
+          "ore_elements": [
+            "U",
+            "Mo",
+            "Pb",
+            "F"
+          ],
+          "alterations": [
+            {
+              "mineral": "赤铁矿化（红化）",
+              "zone": "红化带",
+              "priority": 1,
+              "anomaly_type": "Fe³⁺",
+              "sensor_ratio": {
+                "ASTER": "B3/B1",
+                "Landsat8": "B4/B2",
+                "Sentinel2": "B4/B2"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B2",
+                  "B3",
+                  "B4"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B4",
+                  "B5",
+                  "B6"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B2"
+                  ],
+                  "negative_bands": [
+                    "B1"
+                  ],
+                  "typical_pc_index": "PC2或PC3",
+                  "anomaly_color": "亮色=铁氧化物富集"
+                }
+              }
+            },
+            {
+              "mineral": "绢云母",
+              "zone": "水云母化带",
+              "priority": 1,
+              "anomaly_type": "Al-OH",
+              "absorption_um": 2.2,
+              "reflectance_peak_um": 2.1,
+              "sensor_ratio": {
+                "ASTER": "B5/B6",
+                "Landsat8": "B6/B7",
+                "Sentinel2": "B11/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B6",
+                  "B7"
+                ],
+                "landsat8_bands": [
+                  "B2",
+                  "B5",
+                  "B6",
+                  "B7"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B6",
+                    "B7"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=蚀变（若正负反号则暗色=蚀变，等效）"
+                }
+              }
+            },
+            {
+              "mineral": "绿泥石",
+              "zone": "绿泥石化",
+              "priority": 2,
+              "anomaly_type": "Mg-OH",
+              "absorption_um": 2.33,
+              "reflectance_peak_um": 2.25,
+              "sensor_ratio": {
+                "ASTER": "B6/B8",
+                "Sentinel2": "B12/B8A"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER",
+                "input_bands": [
+                  "B1",
+                  "B4",
+                  "B8",
+                  "B9"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B4"
+                  ],
+                  "negative_bands": [
+                    "B8"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=Mg-OH蚀变"
+                }
+              }
+            },
+            {
+              "mineral": "硅化（石英脉）",
+              "zone": "硅化（玉髓）",
+              "priority": 2,
+              "anomaly_type": "TIR-Si",
+              "sensor_ratio": {
+                "ASTER_TIR": "B14/B12"
+              },
+              "crosta_pca": {
+                "sensor": "ASTER_TIR",
+                "input_bands": [
+                  "B10",
+                  "B12",
+                  "B13",
+                  "B14"
+                ],
+                "pc_criterion": {
+                  "positive_bands": [
+                    "B12"
+                  ],
+                  "negative_bands": [
+                    "B14"
+                  ],
+                  "typical_pc_index": "PC3或PC4",
+                  "anomaly_color": "亮色=硅化（石英富集）",
+                  "note": "也可B14+/B12-（取决于数据），关注载荷反号即可"
+                }
+              }
+            },
+            {
+              "mineral": "萤石",
+              "zone": "萤石化",
+              "priority": 3,
+              "anomaly_type": "Ca-F"
+            }
+          ],
+          "remote_sensing_signature": "火山塌陷盆地内 Fe³⁺(红化)+Al-OH(水云母)叠加异常，沿断裂与岩体接触带分布。",
+          "domestic_examples": [
+            "江西相山邹家山",
+            "江西相山居隆庵",
+            "浙江大桥坞"
+          ],
+          "international_examples": [
+            "澳大利亚Ben Lomond"
+          ],
+          "crosta_pca_groups": [
+            {
+              "group": "Fe³⁺组",
+              "sensor": "ASTER",
+              "target_mineral": "褐铁矿/赤铁矿",
+              "input_bands": [
+                "B1",
+                "B2",
+                "B3",
+                "B4"
+              ],
+              "pc_criterion_summary": "B2载荷为正 / B1载荷为负（铁染亮色）",
+              "typical_pc_index": "PC2或PC3"
+            },
+            {
+              "group": "Al-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绢云母/白云母",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B6",
+                "B7"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B6-B7载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "Mg-OH组",
+              "sensor": "ASTER",
+              "target_mineral": "绿泥石、绿帘石",
+              "input_bands": [
+                "B1",
+                "B4",
+                "B8",
+                "B9"
+              ],
+              "pc_criterion_summary": "B4载荷为正 / B8载荷为负",
+              "typical_pc_index": "PC3或PC4"
+            },
+            {
+              "group": "TIR-Si组",
+              "sensor": "ASTER_TIR",
+              "target_mineral": "硅化（石英脉）",
+              "input_bands": [
+                "B10",
+                "B12",
+                "B13",
+                "B14"
+              ],
+              "pc_criterion_summary": "B12载荷为正 / B14载荷为负",
               "typical_pc_index": "PC3或PC4"
             }
           ]

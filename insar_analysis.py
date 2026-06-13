@@ -223,6 +223,87 @@ def attribute_deformation(active_mask: np.ndarray,
     )
 
 
+def coherence_lineaments(coherence: np.ndarray,
+                         coherence_threshold: float = COHERENCE_MID,
+                         line_length: int = 9,
+                         n_orientations: int = 6,
+                         high_percentile: float = 90.0) -> InsarAnalysisResult:
+    """
+    SAR 穿透构造提取(丛林模式增强,路径3 的"现在可做"档)。
+
+    L 波段 SAR 对冠层穿透优于光学;郁闭冠层下"持续低相干"的线性体往往追踪断裂 / 岩性接触带
+    (常规光学被植被遮蔽看不到)。本函数对相干性图做多方向线性匹配滤波,提取低相干线性体强度,
+    作为构造证据喂给 prospectivity 的 structure/deformation 层。
+
+    算法:low = max(0, threshold - coherence) (越低于阈值越亮) → 对每个方向用细长线核做均值
+    匹配滤波 → 取各方向最大响应(线状结构高、团块噪声低)→ 归一化 + 高分位阈值出线性体掩膜。
+
+    注意:本函数需要"相干性栅格"输入。当前 geo-insar broker 仅暴露 velocity / deformation_evidence,
+    尚无 coherence 产物 —— 该能力已就绪,待 geo-insar 侧产出 coherence.tif 后即可接入(见方案路径3)。
+
+    Returns
+    -------
+    InsarAnalysisResult,.array 为低相干线性体强度 [0,1],.mask 为线性体掩膜。
+    """
+    from scipy.ndimage import convolve, gaussian_filter
+
+    coh = np.clip(np.asarray(coherence, dtype=np.float32), 0, 1)
+    finite = np.isfinite(coh)
+    coh_f = np.where(finite, coh, 1.0)  # 缺测当作高相干(不产生假线性体)
+    low = np.clip(coherence_threshold - coh_f, 0.0, None)
+    low = gaussian_filter(low, sigma=0.8)
+
+    L = max(3, int(line_length) | 1)  # 奇数
+    cx = L // 2
+    responses = []
+    for i in range(max(1, n_orientations)):
+        theta = np.pi * i / max(1, n_orientations)
+        kernel = np.zeros((L, L), dtype=np.float32)
+        # 在核中心画一条该方向的细线
+        for t in range(-cx, cx + 1):
+            x = int(round(cx + t * np.cos(theta)))
+            y = int(round(cx + t * np.sin(theta)))
+            if 0 <= x < L and 0 <= y < L:
+                kernel[y, x] = 1.0
+        ksum = kernel.sum()
+        if ksum > 0:
+            kernel /= ksum
+        responses.append(convolve(low, kernel, mode="nearest"))
+
+    strength = np.max(np.stack(responses, axis=0), axis=0).astype(np.float32)
+    # 归一化到 [0,1]
+    s = strength[finite]
+    if s.size and float(s.max() - s.min()) > 1e-9:
+        lo, hi = np.percentile(s, 2), np.percentile(s, 98)
+        strength = np.clip((strength - lo) / (hi - lo + 1e-9), 0, 1).astype(np.float32)
+    strength = np.where(finite, strength, np.nan).astype(np.float32)
+
+    samp = strength[np.isfinite(strength)]
+    thr = float(np.percentile(samp, high_percentile)) if samp.size else float("nan")
+    # 线性体须有实际低相干信号:阈值与强度均需显著为正,否则(全场高相干)判为无线性体,避免整图误判
+    if np.isfinite(thr) and thr > 1e-4:
+        mask = np.isfinite(strength) & (strength >= thr) & (strength > 1e-4)
+    else:
+        mask = np.zeros(strength.shape, dtype=bool)
+
+    stats = {
+        "coherence_threshold": coherence_threshold,
+        "lineament_threshold": thr,
+        "lineament_pixel_ratio": float(mask.sum()) / max(int(samp.size), 1),
+        "n_orientations": n_orientations,
+        "line_length": L,
+    }
+    return InsarAnalysisResult(
+        name="coherence_lineaments",
+        array=strength,
+        mask=mask,
+        stats=stats,
+        colormap="magma",
+        vmin=0.0, vmax=1.0,
+        unit="低相干线性体强度 (0-1)",
+    )
+
+
 def fusion_deformation_mineral(velocity: np.ndarray,
                                mineral_anomaly: np.ndarray,
                                coherence: Optional[np.ndarray] = None,

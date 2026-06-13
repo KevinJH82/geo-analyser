@@ -23,6 +23,12 @@ from alteration_db import (
     get_deposit_type_meta,
     normalize_sensor,
 )
+# 丛林模式:红边/地植物学胁迫指数 — 从 commons 共享层引入(纯函数,无循环依赖)
+import os as _os, sys as _sys
+_REPO_ROOT = _os.path.dirname(_os.path.dirname(_os.path.abspath(__file__)))
+if _REPO_ROOT not in _sys.path:
+    _sys.path.insert(0, _REPO_ROOT)
+from commons.spectral_indices import calc_ndvi, calc_ndre, calc_cire, calc_rep
 
 # ─────────────────────────────────────────────
 # 传感器波段配置 — JSON 中的 BN 编号 → image 数组通道索引
@@ -382,6 +388,77 @@ def calc_band_depth(
 
 
 # ─────────────────────────────────────────────
+# 地植物学胁迫(丛林模式)
+# ─────────────────────────────────────────────
+
+def calc_veg_stress(
+    image: np.ndarray,
+    sensor: str,
+    roi_mask: Optional[np.ndarray] = None,
+    bn_map: Optional[Dict[str, int]] = None,
+    index: str = "ndre",
+    veg_floor: float = 0.30,
+    wavelengths_um: Optional[np.ndarray] = None,
+) -> np.ndarray:
+    """
+    地植物学胁迫指数 —— 丛林模式的核心探测代理。
+
+    郁闭冠层下岩石光谱被遮蔽,常规蚀变失效;但矿化/微渗漏会使其上方植物受金属毒害/
+    还原胁迫 → 叶绿素↓、红边蓝移。本函数在"有植被"(NDVI>veg_floor)的像元上计算植被
+    活力(默认 NDRE),再取负向 —— 活力越低输出越高,从而与 _threshold_anomaly(高值=异常)
+    天然配合:输出高值 = 植被受胁迫 = 潜在矿化指示。注意此法不应被植被掩膜剔除(植被即信号)。
+
+    支持传感器:Sentinel-2(红边 B5/B6/B7)、EnMAP/PRISMA(高光谱,需传 wavelengths_um)。
+    无红边波段的传感器(Landsat/ASTER)抛 ValueError,由 analyze_batch 静默降级。
+
+    Parameters
+    ----------
+    index : {"ndre","cire","rep"}  活力代理指数
+    veg_floor : float  NDVI 下限,低于此值视作无冠层、不参与(置 NaN)
+    wavelengths_um : 高光谱波段中心波长(µm),提供时优先按波长取红边反射率
+
+    Returns
+    -------
+    index_map (H,W) float32 = -活力;非植被像元 / ROI 外置 NaN。
+    """
+    sensor_key = normalize_sensor(sensor) or sensor
+
+    if wavelengths_um is not None:
+        # 高光谱:按波长就近取红边附近反射率
+        red = _reflectance_at(image, wavelengths_um, 0.665)
+        re1 = _reflectance_at(image, wavelengths_um, 0.705)
+        re2 = _reflectance_at(image, wavelengths_um, 0.740)
+        re3 = _reflectance_at(image, wavelengths_um, 0.783)
+        nir = _reflectance_at(image, wavelengths_um, 0.800)
+    elif sensor_key == "Sentinel2":
+        bm = bn_map if bn_map is not None else _bn_map("Sentinel2")
+
+        def _b(name: str) -> np.ndarray:
+            if name not in bm or bm[name] >= image.shape[0]:
+                raise ValueError(f"Sentinel-2 数据缺红边波段 {name}")
+            return image[bm[name]].astype(np.float32)
+
+        red, re1, re2, re3, nir = _b("B4"), _b("B5"), _b("B6"), _b("B7"), _b("B8")
+    else:
+        raise ValueError(f"传感器 {sensor_key} 无红边波段,不支持地植物学胁迫法")
+
+    ndvi = calc_ndvi(nir, red)
+    if index == "rep":
+        vigor = calc_rep(red, re1, re2, re3)          # nm,越大越健康(蓝移=胁迫)
+    elif index == "cire":
+        vigor = calc_cire(re3, re1)
+    else:  # "ndre" 默认
+        vigor = calc_ndre(nir, re1)
+
+    veg = ndvi > veg_floor
+    stress = (-vigor.astype(np.float32))              # 活力低 → 胁迫高
+    index_map = np.where(veg & np.isfinite(stress), stress, np.nan).astype(np.float32)
+    if roi_mask is not None:
+        index_map = np.where(roi_mask, index_map, np.nan).astype(np.float32)
+    return index_map
+
+
+# ─────────────────────────────────────────────
 # 阈值化
 # ─────────────────────────────────────────────
 
@@ -544,6 +621,28 @@ def analyze_single(
             anomaly_ratio=anomaly_ratio, threshold=thr,
             ratio_expr=f"BD({feat['feature_um']}µm)",
             sign=feat_sign,
+        )
+
+    if method == "veg_stress":
+        if not target_spec.get("veg_stress_available"):
+            raise ValueError(f"传感器 {sensor_key} 不支持 {mineral} 的地植物学胁迫法")
+        vspec = target_spec.get("veg_stress_spec") or {}
+        index_map = calc_veg_stress(
+            image, sensor,
+            roi_mask=roi_mask, bn_map=bn_map,
+            index=vspec.get("index", "ndre"),
+            veg_floor=float(vspec.get("veg_floor", 0.30)),
+            wavelengths_um=wavelengths_um,
+        )
+        anomaly, thr = _threshold_anomaly(index_map, roi_mask, threshold_method, k)
+        roi_size = int(roi_mask.sum()) if roi_mask is not None else int(np.isfinite(index_map).sum())
+        anomaly_ratio = float(anomaly.sum()) / max(roi_size, 1)
+        return AlterationResult(
+            mineral=mineral, method="veg_stress", sensor=sensor_key,
+            index_map=index_map, anomaly_mask=anomaly,
+            anomaly_ratio=anomaly_ratio, threshold=thr,
+            ratio_expr=f"VEG_STRESS({vspec.get('index', 'ndre')})",
+            sign=-1,
         )
 
     raise ValueError(f"未知方法: {method}")

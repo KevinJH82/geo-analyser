@@ -438,6 +438,42 @@ def get_recommended_targets(deposit_type_name: str, sensor: str) -> List[Dict[st
 
 _ALL_SENSORS = ("ASTER", "Landsat8", "Sentinel2")
 
+# ─────────────────────────────────────────────
+# 丛林模式:通用地植物学胁迫探测目标
+# 密林区岩石被冠层遮蔽、常规蚀变失效;改为探测"矿化/微渗漏导致的植物胁迫"(红边蓝移/叶绿素↓)。
+# 该目标与具体矿种无关,任何矿床类型在丛林模式下均可叠加;仅含红边波段的传感器可用。
+# ─────────────────────────────────────────────
+
+_REDEDGE_SENSORS = {"Sentinel2", "EnMAP", "PRISMA"}
+
+_JUNGLE_VEG_STRESS_TARGET = {
+    "mineral":              "丛林地植物胁迫(红边)",
+    "zone":                 "矿化/微渗漏地表植被冠层",
+    "priority":             1,
+    "anomaly_type":         "金属毒害/还原胁迫 → 叶绿素↓、红边蓝移",
+    "absorption_um":        None,
+    "reflectance_peak_um":  None,
+    "ratio_expr":           None,
+    "pca_spec":             None,
+    "ratio_available":      False,
+    "pca_available":        False,
+    "band_depth_available": False,
+    "veg_stress_available": True,
+    "veg_stress_spec":      {"index": "ndre", "veg_floor": 0.30},
+}
+
+
+def jungle_veg_stress_target(sensor: str) -> Optional[Dict[str, Any]]:
+    """
+    返回丛林模式地植物学胁迫探测目标(deep-copy)。仅含红边波段的传感器
+    (Sentinel-2 / EnMAP / PRISMA)可用,否则返回 None(由调用方静默跳过)。
+    """
+    sk = normalize_sensor(sensor) or sensor
+    if sk not in _REDEDGE_SENSORS:
+        return None
+    import copy
+    return copy.deepcopy(_JUNGLE_VEG_STRESS_TARGET)
+
 
 def get_targets_multi_sensor(deposit_type_name: str) -> List[Dict[str, Any]]:
     """
