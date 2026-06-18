@@ -32,6 +32,7 @@ from alteration_db import (
     get_recommended_targets, get_targets_multi_sensor, get_deposit_type_meta,
 )
 from deposit_type_inference import infer_deposit_types_detailed
+from structural_deposit import structural_deposit_candidates
 from delivery_project import (
     DELIVERY_ROOT, list_projects, open_project_from_upload,
     resolve_project_dir, load_sensor_data, list_available_sensors,
@@ -621,6 +622,51 @@ def _pixel_polygon_to_geojson(file_path: str, pixel_polygon: list) -> Optional[D
     except Exception as e:
         app.logger.warning(f"_pixel_polygon_to_geojson 失败: {e}")
         return None
+
+
+@app.route('/api/structural_deposit_type', methods=['POST'])
+def api_structural_deposit_type():
+    """
+    最高优先级来源:从 geo-stru 构造解译产出获取矿床类型候选(翻译成蚀变库 type_name)。
+
+    body: {roi_geojson: {...}, top_k: 3}
+    返回: {candidates: [{deposit_type, confidence, evidence, source}],
+           degraded: bool, hint: str, source: "geo-stru", aoi_name, run_id}
+    无 geo-stru 产物 / 映射不到时 degraded=true,前端据此回退 LLM 自动识别。
+    任何异常静默降级,绝不阻断前端级联。
+    """
+    data = request.json or {}
+    top_k = int(data.get("top_k", 3))
+    roi = data.get("roi_geojson")
+    if not roi:
+        return jsonify({
+            "candidates": [], "degraded": True, "source": "geo-stru",
+            "hint": "缺少 roi_geojson",
+        })
+    try:
+        result = structural_deposit_candidates(roi, top_k=top_k)
+        candidates = result["candidates"]
+        status = result.get("status", "no_product")
+        return jsonify({
+            "candidates": candidates,
+            "status":     status,                       # ok | no_product | non_alteration
+            "degraded":   len(candidates) == 0,
+            # non_alteration:geo-stru 已权威判定为油气/非蚀变靶区,前端不应回退 LLM 改判
+            "applicable": status != "non_alteration",
+            "source":     "geo-stru",
+            "aoi_name":   result.get("aoi_name"),
+            "run_id":     result.get("run_id"),
+            "primary_model": result.get("primary_model"),
+            "primary_confidence": result.get("primary_confidence"),
+            "hint":       result.get("reason") or "",
+        })
+    except Exception as e:
+        app.logger.error(f"structural_deposit_type 失败: {e}", exc_info=True)
+        return jsonify({
+            "candidates": [], "status": "no_product", "degraded": True,
+            "applicable": True, "source": "geo-stru",
+            "hint": f"geo-stru 构造推理失败: {e}",
+        })
 
 
 @app.route('/api/infer_deposit_type', methods=['POST'])

@@ -553,12 +553,52 @@ function drawRoiOverlay() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 }
 
-/* ═══════ 矿床类型自动识别 ═══════ */
+/* ═══════ 矿床类型自动识别(优先级:geo-stru 构造推理 > LLM > 手动) ═══════ */
 async function runAutoInfer() {
     if (!AlterState.roiGeojson) return;
     document.getElementById('depositTypeHint').textContent = '正在自动识别…';
     document.getElementById('depositTypeHint').style.display = '';
-    pushAlterLog('调用矿床类型自动识别…', 'text-blue-600');
+
+    // 优先级 1:geo-stru 构造推理
+    pushAlterLog('优先调用 geo-stru 构造推理识别矿床类型…', 'text-blue-600');
+    try {
+        const resp = await fetch('/api/structural_deposit_type', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ roi_geojson: AlterState.roiGeojson, top_k: 3 }),
+        });
+        const data = await resp.json();
+        if (data.status === 'ok' && data.candidates && data.candidates.length) {
+            AlterState.depositCandidates = data.candidates;
+            renderDepositCandidates(data.candidates);
+            const aoiTag = data.aoi_name ? ' · ' + data.aoi_name : '';
+            pushAlterLog(`构造推理识别到 ${data.candidates.length} 个候选(geo-stru${aoiTag}): ${data.candidates.map(c => c.deposit_type).join(', ')}`, 'text-emerald-600');
+            return;
+        }
+        if (data.status === 'non_alteration') {
+            // geo-stru 已权威判定为油气/非蚀变靶区:不改判金属矿,也不回退 LLM,直接告知 + 提供手动兜底
+            document.getElementById('depositCandidates').style.display = 'none';
+            document.getElementById('depositTypeHint').textContent = data.hint || 'geo-stru 判定为油气/非蚀变靶区,蚀变分析不适用。';
+            document.getElementById('depositTypeHint').style.display = '';
+            document.getElementById('depositManualToggle').style.display = 'block';
+            document.getElementById('depositManualPanel').style.display = 'block';
+            await loadCommodityList();
+            pushAlterLog(`geo-stru 判定为非蚀变靶区(${data.primary_model || '油气类'}),蚀变分析不适用;如需可手动选择`, 'text-amber-600');
+            return;
+        }
+        pushAlterLog(`geo-stru 构造推理无产物: ${data.hint || '无'},回退 LLM`, 'text-amber-600');
+    } catch (e) {
+        pushAlterLog('geo-stru 构造推理请求失败,回退 LLM: ' + e.message, 'text-amber-600');
+    }
+
+    // 优先级 2:LLM 自动识别(仅在 geo-stru 无产物时;失败再回退手动)
+    await inferByLLM();
+}
+
+// LLM 自动识别 + 降级到手动两级下拉(原 runAutoInfer 逻辑,维持现状)
+async function inferByLLM() {
+    document.getElementById('depositTypeHint').textContent = '正在调用 LLM 自动识别…';
+    document.getElementById('depositTypeHint').style.display = '';
+    pushAlterLog('调用 LLM 矿床类型自动识别…', 'text-blue-600');
     try {
         const resp = await fetch('/api/infer_deposit_type', {
             method: 'POST', headers: { 'Content-Type': 'application/json' },

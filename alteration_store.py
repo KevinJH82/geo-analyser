@@ -54,7 +54,7 @@ RESULTS_ROOT = Path(os.environ.get(
 # 同一 (项目+矿床类型) 自动保存会累积,保留最近 N 个 run,删更旧的
 MAX_RUNS_PER_DEPOSIT = int(os.environ.get("MAX_RUNS_PER_DEPOSIT", "30"))
 
-SCHEMA_VERSION = "1.1"   # 1.1: 增加构造约束(structural)块
+SCHEMA_VERSION = "1.2"   # 1.1: 增加构造约束(structural)块; 1.2: 增加决策轨迹血缘 trace_id 三键
 
 _SAFE_RE = re.compile(r"[^\w一-龥-]+")
 
@@ -140,6 +140,8 @@ def save_batch_run(
     high_confidence_total_pixels: int,
     sensors: Dict[str, Dict[str, Any]],
     structural: Optional[Dict[str, Any]] = None,
+    trace_id: Optional[str] = None,
+    upstream_metadatas: Optional[List[Dict[str, Any]]] = None,
 ) -> Dict[str, Any]:
     """
     把一次批量分析落盘并返回 {run_id, run_dir, n_rasters, n_previews}。
@@ -321,6 +323,13 @@ def save_batch_run(
         "composites":                   manifest_composites,
         "structural":                   manifest_structural,
     }
+    # 决策轨迹血缘三键（容错，不影响产物落盘）：显式 trace_id 优先 → 上游继承 → 自生成
+    try:
+        from commons.trace import stamp_metadata
+        stamp_metadata(manifest, explicit_trace_id=trace_id,
+                       upstream_metadatas=upstream_metadatas)
+    except Exception:
+        pass
     (run_dir / "manifest.json").write_text(
         json.dumps(manifest, ensure_ascii=False, indent=2), encoding="utf-8"
     )
