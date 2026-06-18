@@ -15,13 +15,20 @@ from flask import Flask, render_template, request, jsonify, Response, send_file
 from datetime import datetime
 import traceback
 
-# 从项目根目录的 .env 加载环境变量(如 DEEPSEEK_API_KEY),
-# 让密钥持久化、无需每次手动 export。必须在导入会读取 env 的项目模块之前调用。
+# 从同级 .env 加载环境变量(如 DEEPSEEK_API_KEY),让密钥持久化、无需每次手动 export。
+# 必须在导入会读取 env 的项目模块之前调用。优先 python-dotenv,缺失则用无依赖手动解析
+# (系统 python 常无 dotenv,此前会静默忽略 .env)。
+_envf = Path(__file__).parent / ".env"
 try:
     from dotenv import load_dotenv
-    load_dotenv(Path(__file__).parent / ".env")
+    load_dotenv(_envf)
 except ImportError:
-    pass  # 未安装 python-dotenv 时退回到纯环境变量方式
+    if _envf.exists():
+        for _line in _envf.read_text(encoding="utf-8").splitlines():
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
 
 from alteration_analysis import (
     analyze_alteration, get_supported_minerals, MINERAL_CATALOG,
@@ -50,6 +57,15 @@ from alteration_store import (
 matplotlib.use('Agg')
 
 app = Flask(__name__, template_folder='templates', static_folder='static')
+# ── 内部鉴权:拒绝绕过 BFF 的直连(PORTAL_INTERNAL_KEY 配置后生效) ──
+try:
+    import sys as _ia_sys
+    if '/opt/deepexplor-services' not in _ia_sys.path:
+        _ia_sys.path.insert(0, '/opt/deepexplor-services')
+    from commons.internal_auth import init_internal_auth as _init_internal_auth
+    _init_internal_auth(app)
+except Exception as _ia_e:
+    print(f'[internal_auth] 跳过接入: {_ia_e}')
 app.config['MAX_CONTENT_LENGTH'] = 500 * 1024 * 1024  # 500MB
 
 # ─────────────────────────────────────────────
@@ -1477,6 +1493,7 @@ def api_analyze_batch():
         saved_info = save_batch_run(
             project_name=project_name,
             deposit_type=deposit_type,
+            tenant_id=request.headers.get('X-Tenant-Id'),
             params={
                 "threshold_method":  threshold_method,
                 "k":                 k,

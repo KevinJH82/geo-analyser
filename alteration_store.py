@@ -142,6 +142,7 @@ def save_batch_run(
     structural: Optional[Dict[str, Any]] = None,
     trace_id: Optional[str] = None,
     upstream_metadatas: Optional[List[Dict[str, Any]]] = None,
+    tenant_id: Optional[str] = None,
 ) -> Dict[str, Any]:
     """
     把一次批量分析落盘并返回 {run_id, run_dir, n_rasters, n_previews}。
@@ -327,7 +328,7 @@ def save_batch_run(
     try:
         from commons.trace import stamp_metadata
         stamp_metadata(manifest, explicit_trace_id=trace_id,
-                       upstream_metadatas=upstream_metadatas)
+                       upstream_metadatas=upstream_metadatas, tenant_id=tenant_id)
     except Exception:
         pass
     (run_dir / "manifest.json").write_text(

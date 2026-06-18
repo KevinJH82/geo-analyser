@@ -34,7 +34,7 @@ USGS_BUFFER_DEG = 0.5         # ROI bbox 向外扩展(度,约 50km)
 USGS_TIMEOUT = 10             # 秒
 USGS_MAX_FEATURES = 200
 
-DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-chat")
+DEEPSEEK_MODEL = os.environ.get("DEEPSEEK_MODEL", "deepseek-v4-flash")
 DEEPSEEK_BASE_URL = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com")
 LLM_TIMEOUT = 30
 LLM_MAX_TOKENS = 1500
