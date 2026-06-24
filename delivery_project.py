@@ -21,6 +21,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import xml.etree.ElementTree as ET
@@ -85,15 +86,14 @@ def _project_main_name(filename: str) -> str:
     return Path(filename).stem
 
 
-def resolve_project_dir(uploaded_filename: str) -> Optional[Path]:
-    """按上传文件名主名称定位交付目录下的项目目录。"""
-    main = _project_main_name(uploaded_filename)
-    if not main:
-        return None
-    candidate = DELIVERY_ROOT / main
-    if candidate.is_dir():
-        return candidate
-    return None
+def resolve_project_dir(uploaded_filename: str, roi_geojson: Optional[Dict[str, Any]] = None,
+                        delivery_id: str = "") -> Optional[Path]:
+    """定位交付目录下的项目目录。解析链:delivery_id → 精确名 → 归一名 → 几何覆盖兜底。
+
+    roi_geojson(可选):给定则名字匹配失败时按 ROI 空间范围覆盖度兜底定位——KML 改名也能命中。
+    delivery_id(可选):门户绑定时优先按 ID 定位。不给则仅名字/几何匹配(向后兼容)。
+    """
+    return resolve_project_dir_verbose(uploaded_filename, roi_geojson, delivery_id).get("dir")
 
 
 def list_projects() -> List[Dict[str, str]]:
@@ -199,6 +199,38 @@ def bbox_from_geojson(geom: Dict[str, Any]) -> Optional[Tuple[float, float, floa
     lons = [p[0] for p in pts]
     lats = [p[1] for p in pts]
     return min(lons), min(lats), max(lons), max(lats)
+
+
+# ─────────────────────────────────────────────
+# 几何兜底定位(P1 止血:KML 改名也能命中)
+# ─────────────────────────────────────────────
+
+# 几何解析/索引/清单统一由 commons.delivery 实现(单一来源,避免重复与缓存冲突)。
+
+def resolve_project_dir_verbose(uploaded_filename: str,
+                                roi_geojson: Optional[Dict[str, Any]] = None,
+                                delivery_id: str = "") -> Dict[str, Any]:
+    """解析交付目录 → {dir, method, candidates, delivery_id}。委托给 commons.delivery。
+
+    解析链(commons 实现):delivery_id(门户已绑定则优先) → 精确名 → 归一名 → 几何覆盖。
+    method: id / exact / normalized / spatial / none。统一一份索引/清单,避免重复实现与缓存冲突。
+    """
+    try:
+        import sys as _sys
+        if "/opt/deepexplor-services" not in _sys.path:
+            _sys.path.insert(0, "/opt/deepexplor-services")
+        from commons.delivery import resolve as _resolve
+        r = _resolve(name=uploaded_filename or "", roi_geojson=roi_geojson,
+                     delivery_id=delivery_id or "", root=DELIVERY_ROOT)
+        return {"dir": r.get("dir"), "method": r.get("method"),
+                "candidates": r.get("candidates") or [], "delivery_id": r.get("delivery_id")}
+    except Exception:
+        # commons 不可用时退回最朴素精确名匹配,保证不崩
+        main = _project_main_name(uploaded_filename) if uploaded_filename else ""
+        cand = DELIVERY_ROOT / main if main else None
+        if cand and cand.is_dir():
+            return {"dir": cand, "method": "exact", "candidates": [], "delivery_id": None}
+        return {"dir": None, "method": "none", "candidates": [], "delivery_id": None}
 
 
 # ─────────────────────────────────────────────
@@ -724,18 +756,27 @@ def get_prisma_metadata_paths(project_dir: Path) -> List[Path]:
 # 高层入口: 解析上传文件 → 项目元信息
 # ─────────────────────────────────────────────
 
-def open_project_from_upload(uploaded_path: Path) -> Optional[Dict[str, Any]]:
+def open_project_from_upload(uploaded_path: Path, delivery_id: str = "") -> Optional[Dict[str, Any]]:
     """
     用户上传一个 ROI 文件(任意位置),按主名称定位项目目录,解析 ROI 几何,
     扫描可用传感器,返回完整项目元信息。
     """
     uploaded_path = Path(uploaded_path)
-    project_dir = resolve_project_dir(uploaded_path.name)
-    if not project_dir:
-        return {"error": f"在交付目录中未找到与 '{_project_main_name(uploaded_path.name)}' 同名的项目",
-                "delivery_root": str(DELIVERY_ROOT)}
-
+    # 先解析 ROI 几何,供"几何兜底"定位(KML 改名也能命中)
     roi_geom = parse_roi_file(uploaded_path)
+
+    res = resolve_project_dir_verbose(uploaded_path.name, roi_geojson=roi_geom,
+                                      delivery_id=delivery_id)
+    project_dir = res["dir"]
+    if not project_dir:
+        cands = res.get("candidates") or []
+        hint = ""
+        if cands:
+            hint = "；最接近的交付:" + "、".join(
+                f"{c['name']}(覆盖{int(c['coverage']*100)}%)" for c in cands[:3])
+        return {"error": f"未能在交付库定位 '{_project_main_name(uploaded_path.name)}' 对应项目{hint}",
+                "candidates": cands, "delivery_root": str(DELIVERY_ROOT)}
+
     if not roi_geom:
         return {"error": f"无法解析 ROI 文件 {uploaded_path.name}(支持 .ovkml/.kml/.geojson)",
                 "project_dir": str(project_dir)}
@@ -750,6 +791,7 @@ def open_project_from_upload(uploaded_path: Path) -> Optional[Dict[str, Any]]:
         "bbox":            list(bbox) if bbox else None,
         "available_sensors": sensors,
         "winter_subdir":   WINTER_SUBDIR,
+        "resolved_by":     res["method"],   # exact / normalized / spatial
     }
 
 

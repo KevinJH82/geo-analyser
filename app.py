@@ -345,7 +345,8 @@ def api_upload_roi():
     saved = UPLOAD_TMP / f.filename
     f.save(saved)
 
-    info = open_project_from_upload(saved)
+    # 门户已绑定 delivery_id 则优先按 ID 定位(命名一次、按 ID 引用),否则退回几何/名字
+    info = open_project_from_upload(saved, delivery_id=request.headers.get("X-Delivery-Id", ""))
     if info is None or "error" in info:
         msg = info.get("error", "未知错误") if info else "解析失败"
         return jsonify({"error": msg,
@@ -2686,4 +2687,6 @@ def _render_insar_array(arr, cmap_name="hot", vmin=None, vmax=None,
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=5001)
+    # use_reloader=False:长请求(analyze_batch 读 SMB 数分钟)期间不被自动重载杀掉连接
+    # (否则 BFF 收到 "Server disconnected")。保留 debug 错误页,仅关有害的文件监视重启。
+    app.run(debug=True, use_reloader=False, host='0.0.0.0', port=5001)
